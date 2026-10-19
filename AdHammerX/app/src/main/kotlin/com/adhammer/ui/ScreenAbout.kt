@@ -269,7 +269,7 @@ fun AboutScreen(ctx: Context) {
             item { Kit.Section("版本信息") }
             item {
                 Kit.Group {
-                    Kit.KeyValue("版本", BuildConfig.VERSION_NAME)
+                    Kit.KeyValue("版本", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     Kit.KeyValue("构建类型", BuildConfig.BUILD_TYPE)
                     Kit.KeyValue("包名", BuildConfig.APPLICATION_ID)
                     Kit.KeyValue("框架", UiState.framework)
@@ -283,6 +283,16 @@ fun AboutScreen(ctx: Context) {
                     Text(
                         text = "本模块仅供学习交流与技术研究使用，请勿用于商业或违法用途。" +
                             "因使用本模块产生的任何后果由使用者自行承担。",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    )
+                }
+            }
+            item { Kit.Section("AI 与逆向限制") }
+            item {
+                Kit.Group {
+                    Text(
+                        text = AI_NOTICE,
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                     )
@@ -556,6 +566,13 @@ private const val API_LATEST = "https://api.github.com/repos/wangershu/adhammer/
 private const val DEVELOPER_NAME = "wangershu"
 private const val DEVELOPER_HANDLE = "@wangershu"
 private const val DEVELOPER_URL = "https://github.com/wangershu"
+
+/** 关于页底部的反 AI 逆向声明（完整版在 assets/AI_POLICY.txt，随包分发） */
+private const val AI_NOTICE =
+    "禁止将本软件及其源代码、构建产物交由任何 AI 系统、大语言模型或自动化分析 Agent " +
+        "进行反编译、反混淆、行为复刻、规则抽取或再实现；" +
+        "也禁止将其用于模型训练、微调、蒸馏、RAG 索引或数据集构建。\n\n" +
+        "允许人类出于个人学习、安全研究与兼容性适配阅读源码，并允许在原许可下 fork 与提交补丁。"
 
 private const val HERO_HEIGHT_FRACTION = 0.60f
 private const val BACKGROUND_SPEED = 0.12f

@@ -57,6 +57,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 完整性校验放在最前面：被重打包 / 被注入就不让界面起来
+        if (!com.adhammer.util.Guard.enforce(this)) return
         UiState.init(this)
         UiPrefs.init(this)
         intent?.getStringExtra("snapshot")?.let { UiState.setSnapshot(it) }

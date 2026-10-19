@@ -19,13 +19,20 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
+
+        <!-- 反 AI 逆向声明：完整版在 assets/AI_POLICY.txt，仓库根目录还有 ai.txt / llms.txt -->
+        <meta-data
+            android:name="com.adhammer.AI_POLICY"
+            android:value="no-reverse-engineering | no-ai-training | no-automated-mining" />
 
         <activity
             android:name="com.adhammer.ui.MainActivity"

@@ -120,15 +120,34 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 
 都没配时会自动退回 debug 签名，构建不会失败。
 
+release 构建会开 R8（类名混淆 + 资源收缩），保留规则见 `app/proguard-rules.pro`：
+LSPosed 入口类、Gson 模型、Manifest 里的组件都必须保名。
+
+### 版本号
+
+版本号**由 tag 驱动**，不用手改 `build.gradle.kts`：
+
+| 变量 | 来源 | 默认值 |
+| --- | --- | --- |
+| `VERSION_NAME` | CI 取 tag 去掉 `v`（`v1.2.0` → `1.2.0`） | `1.1.1` |
+| `VERSION_CODE` | CI 取 `github.run_number`（保证单调递增） | `2` |
+
+本地想指定：`VERSION_NAME=1.2.0 VERSION_CODE=3 ./gradlew :app:assembleRelease`。
+
 ### CI / 发版
 
 - push 到 `main` → `Build Debug APK`
-- push tag `v*` → `Release APK`：`assembleRelease` → 上传 artifact → 自动建 GitHub Release 并附 APK
+- push tag `v*` → `Release APK`：`assembleRelease` → 上传 artifact → 自动建 GitHub Release，
+  附上 APK **和它的 `.sha256` 校验文件**
    （签名 keystore 存在仓库 secrets：`SIGNING_KEYSTORE_BASE64` / `SIGNING_KEYSTORE_PASSWORD` /
    `SIGNING_KEY_ALIAS` / `SIGNING_KEY_PASSWORD`）
 
-发版流程：改 `app/build.gradle.kts` 里的 `versionName`/`versionCode` →
-`git tag vX.Y.Z && git push origin vX.Y.Z`。
+发版流程：`git tag vX.Y.Z && git push origin vX.Y.Z` —— 就这一步，版本号自动跟着走。
+下载后建议核对校验值：
+
+```bash
+sha256sum -c adhammer-vX.Y.Z.apk.sha256
+```
 
 ---
 
@@ -243,7 +262,31 @@ if (/* 你的规则条件 */) {
 
 ---
 
-## 八、参考
+## 八、反逆向与 AI 使用限制
+
+完整声明见 **[AI_POLICY.md](AI_POLICY.md)**（机器可读版：`ai.txt`、`llms.txt`，
+随包分发版：`AdHammerX/app/src/main/assets/AI_POLICY.txt`，应用内「关于 → AI 与逆向限制」）。
+
+要点：**禁止**任何 AI 系统 / 大语言模型 / 自动化分析 Agent 对本软件做反编译、
+反混淆、行为复刻、规则抽取或再实现；**禁止**用于模型训练、微调、蒸馏、RAG 索引或数据集构建。
+允许人类出于个人学习、安全研究与兼容性适配阅读源码。
+
+### 已落地的技术措施
+
+| 措施 | 位置 | 作用 |
+| --- | --- | --- |
+| R8 混淆 + 资源收缩 | `app/build.gradle.kts`（release）+ `app/proguard-rules.pro` | 类名/方法名不可逆，抬高静态分析门槛 |
+| 签名校验 | `util/Guard.kt` + `BuildConfig.SIGN_SHA256` | 构建期把证书 SHA-256 写死进包，被重打包重新签名就对不上，直接拒绝启动 |
+| 注入 / 调试检测 | `util/Guard.kt` | 扫 `/proc/self/maps` 里的 frida / gadget，查 27042 端口，查 debuggable 与调试器 |
+| 禁止备份与迁移 | `AndroidManifest.xml` + `res/xml/data_extraction_rules.xml` | `adb backup` 与换机迁移都导不出规则数据 |
+| 发布包 SHA-256 | `.github/workflows/release.yml` | 每个 Release 附 `.sha256`，可核验收到的包没被换过 |
+
+局限：这些只挡「改两下就发出去」的二次分发，挡不住对症下药的逆向 ——
+要真拦死得上壳 + 服务端校验，那不是这个体量该做的事。
+
+---
+
+## 九、参考
 
 - 原作者博客：https://hammer-finger.blogspot.com/
   - 《应用教程》—— 各 App 定位与下载

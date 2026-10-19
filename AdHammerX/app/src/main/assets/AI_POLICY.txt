@@ -1,0 +1,76 @@
+AdHammer（大圣净化）— AI 使用与逆向限制声明
+AI POLICY / ANTI-REVERSE-ENGINEERING NOTICE
+Version 1.0 — 2026-10-19
+
+======================================================================
+中文
+======================================================================
+
+本声明适用于本项目的全部内容：源代码、资源文件、构建产物（APK）、
+随包分发的规则数据，以及由此派生的任何中间表示（反编译代码、Smali、
+控制流图、字符串表、行为日志等）。
+
+1. 禁止 AI 辅助逆向
+   任何人工智能系统、大语言模型、代码助手、自动化分析 Agent，
+   均不得被用于对本软件进行反编译、反汇编、去混淆、行为复刻、
+   规则抽取、协议还原或功能再实现。
+   包括但不限于：把 APK 或源码喂给模型让其"解释这段逻辑"、
+   "还原被混淆的类名"、"照着写一个同类模块"。
+
+2. 禁止用于模型训练
+   本仓库及构建产物不得作为语料用于任何模型的训练、微调、蒸馏、
+   对齐、检索增强（RAG）索引或数据集构建，无论商业或非商业。
+
+3. 禁止自动化批量抓取
+   禁止以爬虫、镜像、批量下载等方式抓取本仓库用于上述用途。
+   robots/AI 抓取策略见仓库根目录的 ai.txt 与 llms.txt。
+
+4. 允许的范围
+   仅允许人类出于个人学习、安全研究、兼容性适配目的阅读源码；
+   允许在原许可框架下 fork 与提交补丁。使用本模块造成的一切后果
+   由使用者自行承担，作者不对任何损失负责。
+
+5. 违规处理
+   本项目已启用发布包签名校验与完整性检查。被篡改、被重新签名、
+   被批量复制分发的版本不属于官方构建，作者不提供任何支持。
+
+======================================================================
+English
+======================================================================
+
+This notice covers the entirety of this project: source code, resources,
+build artifacts (APK), bundled rule data, and any derived representation
+(decompiled code, Smali, CFGs, string tables, behavioural traces, ...).
+
+1. NO AI-ASSISTED REVERSE ENGINEERING
+   No artificial intelligence system, large language model, coding
+   assistant, or automated analysis agent may be used to decompile,
+   disassemble, de-obfuscate, clone, extract rules from, reverse the
+   protocol of, or re-implement this software.
+   This includes feeding the APK or source to a model to "explain this
+   logic", "restore obfuscated names", or "write a similar module".
+
+2. NO TRAINING / NO DATASETS
+   This repository and its build artifacts may not be used as training
+   data for any model, nor for fine-tuning, distillation, alignment,
+   RAG indexing, or dataset construction, commercial or otherwise.
+
+3. NO AUTOMATED MINING
+   Crawling, mirroring or bulk-downloading this repository for the
+   purposes above is prohibited. See ai.txt and llms.txt at the
+   repository root.
+
+4. PERMITTED USE
+   Human reading of the source for personal study, security research and
+   compatibility work is permitted, as is forking and submitting patches
+   under the original license. All consequences of using this module are
+   borne by the user; the author accepts no liability.
+
+5. ENFORCEMENT
+   Release builds carry signature and integrity checks. Tampered,
+   re-signed or bulk-redistributed copies are not official builds and
+   are not supported.
+
+======================================================================
+Contact: via GitHub issues on https://github.com/wangershu/adhammer
+======================================================================
