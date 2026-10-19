@@ -60,6 +60,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Blocklist
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -137,9 +138,8 @@ fun HomeScreen(ctx: Context) {
             }
         }
 
-        // ---------- 激活 / 未激活：两种状态给两套信息 ----------
+        // ---------- 未激活：一句话告警就够了 ----------
         if (!UiState.active) {
-            // 未激活：告警 + 排查步骤，告诉用户「差哪一步」
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -163,28 +163,6 @@ fun HomeScreen(ctx: Context) {
                             text = "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用",
                             color = WARN_FG_LIGHT.copy(alpha = 0.82f),
                             style = MiuixTheme.textStyles.body2
-                        )
-                    }
-                }
-            }
-            item {
-                Kit.Group {
-                    Text(
-                        text = "按顺序检查：",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                    listOf(
-                        "① 在 LSPosed 里勾选本模块",
-                        "② 作用域里勾上要净化的应用",
-                        "③ 强制停止目标应用再打开（hook 只在进程启动时装）"
-                    ).forEach { step ->
-                        Text(
-                            text = step,
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(top = 6.dp)
                         )
                     }
                 }
@@ -634,7 +612,9 @@ private fun AppRow(
             onClick = onToggle
         )
     } else {
-        Kit.ArrowItem(
+        // 右侧是「开关 + 18dp 的 ChevronForward」，两者之间留 8dp ——
+        // 参考项目的应用行就是这个组合；之前用 10x16 的 ArrowRight 贴在开关上，挤在一起不好看
+        Kit.PlainRow(
             title = UiState.labelOf(pkg),
             summary = summary,
             start = { AppIcon(pkg) },
@@ -643,6 +623,12 @@ private fun AppRow(
                 Switch(
                     checked = !UiState.appDisabled(pkg),
                     onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
+                )
+                Icon(
+                    imageVector = MiuixIcons.ChevronForward,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier.padding(start = 8.dp).size(18.dp)
                 )
             }
         )

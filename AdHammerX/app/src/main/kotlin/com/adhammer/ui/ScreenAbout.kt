@@ -4,7 +4,6 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -35,7 +32,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -62,10 +58,8 @@ import okhttp3.Request
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.Community
 import top.yukonga.miuix.kmp.icon.extended.Info
@@ -140,7 +134,8 @@ fun AboutScreen(ctx: Context) {
         checking = false
     }
 
-    Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+    // 状态栏沉浸：渐变直接铺到状态栏底下，不额外留 padding
+    Box(modifier = Modifier.fillMaxSize()) {
         // 渐变背景：随滚动视差上移 + 淡出
         Canvas(
             modifier = Modifier
@@ -295,7 +290,8 @@ fun AboutScreen(ctx: Context) {
             }
         }
 
-        // Hero 叠在背景之上，不进列表，这样它能独立淡出/缩放
+        // Hero 叠在背景之上，不进列表，这样它能独立淡出/缩放。
+        // 返回交给系统手势/返回键：这一页是沉浸式的，不放左上角箭头。
         AboutHero(
             logoAlpha = logoAlpha,
             logoScale = logoScale,
@@ -304,17 +300,6 @@ fun AboutScreen(ctx: Context) {
                 .height(heroHeight)
                 .padding(horizontal = 16.dp)
         )
-
-        // 悬浮返回键：给个浅底，压在渐变上也看得清
-        IconButton(
-            onClick = { Navigator.back() },
-            modifier = Modifier
-                .padding(start = 8.dp, top = 8.dp)
-                .clip(CircleShape)
-                .background(MiuixTheme.colorScheme.surface.copy(alpha = 0.55f))
-        ) {
-            Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
-        }
     }
 }
 
