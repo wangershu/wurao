@@ -379,6 +379,7 @@ fun AppsScreen(ctx: Context) {
                     append("$count 条规则")
                     if (tasks > 0) append(" · $tasks 个任务")
                 },
+                start = { AppIcon(pkg) },
                 onClick = { Navigator.go(Dest.AppDetail(pkg)) },
                 end = {
                     Switch(

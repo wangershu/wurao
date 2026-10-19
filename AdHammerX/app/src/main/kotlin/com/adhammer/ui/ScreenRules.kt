@@ -54,10 +54,8 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
     var askClear by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Kit.Bar(
-            title = UiState.labelOf(pkg),
-            subtitle = pkg,
-            canBack = true,
+        // 参考项目里的详情页是「紧凑栏 + 顶部实体头」，标题写在头部块里
+        Kit.CompactBar(
             onBack = { Navigator.back() },
             actions = {
                 // 首页 Activity：at=3/4 跳过到首页时必须告诉模块「首页是哪个」
@@ -78,12 +76,16 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
         )
 
         // 应用级开关：关掉后这个 app 一条 hook 都不装（白名单）
-        Kit.SwitchItem(
-            title = "对这个应用生效",
-            summary = if (UiState.appDisabled(pkg)) "已停用：全部规则都不执行"
-            else "该应用的规则正常执行（重启 App 生效）",
-            checked = !UiState.appDisabled(pkg),
-            onChecked = { UiState.setAppDisabled(pkg, !it) }
+        Kit.Header(
+            title = UiState.labelOf(pkg),
+            subtitle = pkg,
+            start = { AppIcon(pkg, 44.dp) },
+            end = {
+                Switch(
+                    checked = !UiState.appDisabled(pkg),
+                    onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
+                )
+            }
         )
 
         TabRow(

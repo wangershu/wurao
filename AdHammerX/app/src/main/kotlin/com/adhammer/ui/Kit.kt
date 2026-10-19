@@ -1,6 +1,7 @@
 package com.adhammer.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,7 @@ import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -168,6 +170,65 @@ object Kit {
         )
     }
 
+    /**
+     * 紧凑标题栏：只有返回键和操作，**不写标题**。
+     *
+     * 参考项目的详情页（如通知渠道页）就是这种：标题让位给正文顶部的 Header 块。
+     */
+    @Composable
+    fun CompactBar(
+        onBack: () -> Unit,
+        actions: @Composable (RowScope.() -> Unit) = {}
+    ) {
+        SmallTopAppBar(
+            title = "",
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
+                }
+            },
+            actions = actions
+        )
+    }
+
+    /**
+     * 详情页顶部的实体头：图标 + 名字 + 副标题 + 右侧开关/操作。
+     * 对应参考项目里「QQ / com.tencent.mobileqq [开关]」那一块。
+     */
+    @Composable
+    fun Header(
+        title: String,
+        subtitle: String = "",
+        start: @Composable (() -> Unit)? = null,
+        end: @Composable (RowScope.() -> Unit)? = null
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (start != null) {
+                Box(modifier = Modifier.padding(end = 14.dp)) { start() }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onBackground
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+            if (end != null) Row(verticalAlignment = Alignment.CenterVertically) { end() }
+        }
+    }
+
     @Composable
     private fun PageList(
         padding: PaddingValues,
@@ -269,21 +330,35 @@ object Kit {
         )
     }
 
+    /** 行首的任意内容（App 图标等），右边留 16dp，与 [LeadingIcon] 对齐 */
+    @Composable
+    fun RowStart(content: @Composable () -> Unit) {
+        Row(modifier = Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            content()
+        }
+    }
+
     /** 普通行（可点，右侧可挂自定义内容） */
     @Composable
     fun PlainRow(
         title: String,
         summary: String = "",
         icon: ImageVector? = null,
+        start: @Composable (() -> Unit)? = null,
         enabled: Boolean = true,
         onClick: (() -> Unit)? = null,
         end: @Composable (RowScope.() -> Unit)? = null
     ) {
+        val leading: (@Composable () -> Unit)? = when {
+            start != null -> start
+            icon != null -> { { LeadingIcon(icon) } }
+            else -> null
+        }
         BasicComponent(
             title = title,
             summary = summary.ifBlank { null },
             enabled = enabled,
-            startAction = icon?.let { { LeadingIcon(it) } },
+            startAction = leading,
             endActions = { if (end != null) end() },
             insideMargin = ITEM_MARGIN,
             onClick = onClick
@@ -296,6 +371,7 @@ object Kit {
         title: String,
         summary: String = "",
         icon: ImageVector? = null,
+        start: @Composable (() -> Unit)? = null,
         enabled: Boolean = true,
         onClick: () -> Unit,
         end: @Composable (RowScope.() -> Unit)? = null
@@ -304,6 +380,7 @@ object Kit {
             title = title,
             summary = summary,
             icon = icon,
+            start = start,
             enabled = enabled,
             onClick = onClick,
             end = {
@@ -380,7 +457,14 @@ object Kit {
             pressFeedbackType = PressFeedbackType.None,
             onLongPress = onLongClick
         ) {
-            PlainRow(title, summary, icon, enabled, onClick, end)
+            PlainRow(
+                title = title,
+                summary = summary,
+                icon = icon,
+                enabled = enabled,
+                onClick = onClick,
+                end = end
+            )
         }
     }
 
@@ -389,11 +473,22 @@ object Kit {
         title: String,
         summary: String = "",
         icon: ImageVector? = null,
+        start: @Composable (() -> Unit)? = null,
         enabled: Boolean = true,
         onClick: () -> Unit,
         end: @Composable (RowScope.() -> Unit)? = null
     ) {
-        RowGroup { ArrowRow(title, summary, icon, enabled, onClick, end) }
+        RowGroup {
+            ArrowRow(
+                title = title,
+                summary = summary,
+                icon = icon,
+                start = start,
+                enabled = enabled,
+                onClick = onClick,
+                end = end
+            )
+        }
     }
 
     @Composable
