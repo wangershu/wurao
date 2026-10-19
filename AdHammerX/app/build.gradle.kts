@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+/** 签名参数：环境变量优先，其次 -P 属性 */
+fun signProp(name: String): String? =
+    System.getenv(name) ?: (project.findProperty(name) as String?)
+
 android {
     namespace = "com.adhammer"
     // libxposed api 102 的依赖元数据要求 compileSdk >= 37
@@ -18,13 +22,34 @@ android {
         versionName = "1.0.0"
     }
 
+    // 发布签名：四个参数优先读环境变量（CI 用 env 注入仓库 secrets），
+    // 没有就退到 -P 属性；两者都没配时用 debug 签名，保证 assembleRelease 不直接失败
+    signingConfigs {
+        create("release") {
+            val ks = signProp("RELEASE_STORE_FILE")
+            if (!ks.isNullOrBlank()) {
+                storeFile = file(ks)
+                storePassword = signProp("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = signProp("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = signProp("RELEASE_KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // 模块里有 xposed 的声明文件与反射路径，先不开混淆
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val hasKs = !signProp("RELEASE_STORE_FILE").isNullOrBlank()
+            signingConfig = if (hasKs) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
