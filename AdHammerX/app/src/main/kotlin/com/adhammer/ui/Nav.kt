@@ -1,6 +1,9 @@
 package com.adhammer.ui
 
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * 极简路由：一个返回栈就够用，不引 navigation-compose（省一层依赖与版本坑）。
@@ -50,7 +53,8 @@ object Navigator {
 
     private val stack = mutableStateListOf<Dest>(Dest.Home)
 
-    var tab: Tab = Tab.HOME
+    /** 必须是 Compose state：底栏高亮和 pager 的联动都靠它，普通 var 不会触发重组 */
+    var tab by mutableStateOf(Tab.HOME)
         private set
 
     val current: Dest get() = stack.lastOrNull() ?: Dest.Home

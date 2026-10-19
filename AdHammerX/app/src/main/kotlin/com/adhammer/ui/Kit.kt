@@ -7,24 +7,23 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -81,6 +80,9 @@ object Kit {
      *
      * 对标 HyperIsland 的 CollapsingPage：TopAppBar 同时给 title 和 largeTitle，
      * 配合 MiuixScrollBehavior 做折叠；列表统一 12dp 间距、底部留白由 [bottomExtra] 控制。
+     *
+     * 四个根页共用同一个 TopAppBar —— 即使没有右上操作也留空那一行，
+     * 这样标题基线完全一致（首页 / 应用 / 统计 / 设置 不会一高一低）。
      */
     @Composable
     fun Page(
@@ -89,76 +91,39 @@ object Kit {
         actionIcon: ImageVector? = null,
         actionDesc: String = "",
         onAction: (() -> Unit)? = null,
+        navigation: (@Composable () -> Unit)? = null,
+        actions: @Composable (RowScope.() -> Unit) = {},
         bottomExtra: Dp = 16.dp,
         content: LazyListScope.() -> Unit
     ) {
         val scrollBehavior = MiuixScrollBehavior()
+        val listState = rememberLazyListState()
+        // 首帧兜底：pager 预组合相邻页时，折叠状态有时会被算成「已收起」，
+        // 表现为一进页面标题就是小标题、列表还往上顶了一截。这里强制回到展开 + 顶部。
+        LaunchedEffect(Unit) {
+            scrollBehavior.state.heightOffset = 0f
+            listState.scrollToItem(0, 0)
+        }
         Scaffold(
             topBar = {
-                if (actionIcon == null || onAction == null) {
-                    // 没有右上操作：不预留那一行空图标位，大标题直接顶上去
-                    LargeTitleBar(title = title, subtitle = subtitle, scrollBehavior = scrollBehavior)
-                } else {
-                    TopAppBar(
-                        title = title,
-                        largeTitle = title,
-                        subtitle = subtitle,
-                        scrollBehavior = scrollBehavior,
-                        actions = {
+                TopAppBar(
+                    title = title,
+                    largeTitle = title,
+                    subtitle = subtitle,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = { navigation?.invoke() },
+                    actions = {
+                        actions()
+                        if (actionIcon != null && onAction != null) {
                             IconButton(onClick = onAction) {
                                 Icon(imageVector = actionIcon, contentDescription = actionDesc)
                             }
                         }
-                    )
-                }
-            }
-        ) { padding ->
-            PageList(padding, scrollBehavior, bottomExtra, content)
-        }
-    }
-
-    /**
-     * 紧凑大标题栏：只有大标题（+副标题），没有返回键、没有右上操作。
-     *
-     * 普通的 [TopAppBar] 会留出一整行给小标题/操作位，即使什么都不放也占位；
-     * 首页这种没有操作的页面用这个，标题能往上挪一截。
-     * 滚动时标题随 [ScrollBehavior] 上移淡出，和折叠式顶栏的手感一致。
-     */
-    @Composable
-    private fun LargeTitleBar(
-        title: String,
-        subtitle: String,
-        scrollBehavior: ScrollBehavior
-    ) {
-        val collapse = scrollBehavior.state.collapsedFraction
-        val density = LocalDensity.current
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 24.dp)
-                .graphicsLayer {
-                    alpha = 1f - collapse
-                    translationY = -collapse * with(density) { 16.dp.toPx() }
-                }
-        ) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onSurface,
-                lineHeight = 38.sp
-            )
-            if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp)
+                    }
                 )
             }
-            Spacer(modifier = Modifier.height(10.dp))
+        ) { padding ->
+            PageList(padding, scrollBehavior, bottomExtra, listState, content)
         }
     }
 
@@ -178,6 +143,7 @@ object Kit {
         content: LazyListScope.() -> Unit
     ) {
         val scrollBehavior = MiuixScrollBehavior()
+        val listState = rememberLazyListState()
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -201,7 +167,7 @@ object Kit {
                 )
             }
         ) { padding ->
-            PageList(padding, scrollBehavior, bottomExtra, content)
+            PageList(padding, scrollBehavior, bottomExtra, listState, content)
         }
     }
 
@@ -296,9 +262,11 @@ object Kit {
         padding: PaddingValues,
         scrollBehavior: ScrollBehavior,
         bottomExtra: Dp,
+        listState: LazyListState,
         content: LazyListScope.() -> Unit
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .overScrollVertical()

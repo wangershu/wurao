@@ -18,14 +18,18 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarDefaults
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -269,17 +274,39 @@ private fun BottomBar() {
     )
     val selected = Navigator.tab.ordinal
     val onSelect: (Int) -> Unit = { Navigator.switch(Navigator.Tab.entries[it]) }
+    // 选中态：主色图标；未选中走 60% 灰。
+    // miuix 默认两项都是 onSurfaceContainer，只靠 alpha 区分，在浅色悬浮栏上几乎看不出高亮。
+    val colors = NavigationBarDefaults.navigationBarItemColors(
+        unselectedContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        selectedContentColor = MiuixTheme.colorScheme.primary
+    )
 
     if (UiPrefs.floatingBar) {
         // 不给 fillMaxWidth：参考项目的悬浮底栏是「刚好包住 4 个图标」的窄胶囊，不是通栏
         FloatingNavigationBar {
             items.forEachIndexed { index, item ->
-                FloatingNavigationBarItem(
-                    selected = selected == index,
-                    onClick = { onSelect(index) },
-                    icon = item.icon,
-                    label = item.label
-                )
+                val isSelected = selected == index
+                // 悬浮栏的 item 本身不画选中背景，这里自己补一个胶囊底
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 2.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (isSelected) {
+                                MiuixTheme.colorScheme.primary.copy(alpha = 0.14f)
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                ) {
+                    FloatingNavigationBarItem(
+                        selected = isSelected,
+                        onClick = { onSelect(index) },
+                        icon = item.icon,
+                        label = item.label,
+                        colors = colors
+                    )
+                }
             }
         }
     } else {
@@ -289,7 +316,8 @@ private fun BottomBar() {
                     selected = selected == index,
                     onClick = { onSelect(index) },
                     icon = item.icon,
-                    label = item.label
+                    label = item.label,
+                    colors = colors
                 )
             }
         }

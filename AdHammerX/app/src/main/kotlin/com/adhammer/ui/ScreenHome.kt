@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,16 +51,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Blocklist
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.ScreenCapture
 import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -412,12 +420,18 @@ private fun InfoText(title: String, content: String, bottom: Dp = 24.dp) {
 @Composable
 fun AppsScreen(ctx: Context) {
     var query by remember { mutableStateOf("") }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(UiState.appIndex) {
         UiState.ensureLabels(ctx, UiState.appIndex.map { it.first })
     }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { UiState.refreshInstalled(ctx) }
+    }
+    // 退出多选后把选择清掉，下次进来是干净的
+    LaunchedEffect(selectionMode) {
+        if (!selectionMode) selected = emptySet()
     }
 
     val all = UiState.appIndex
@@ -433,7 +447,40 @@ fun AppsScreen(ctx: Context) {
         list to emptyList()
     }
 
-    Kit.Page(title = "应用", subtitle = "${all.size} 个应用") {
+    val visiblePkgs = list.map { it.first }
+    val allSelected = visiblePkgs.isNotEmpty() && selected.containsAll(visiblePkgs)
+    val closeAction: (@Composable () -> Unit)? = if (selectionMode) {
+        {
+            IconButton(onClick = { selectionMode = false }) {
+                Icon(imageVector = MiuixIcons.Close, contentDescription = "退出多选")
+            }
+        }
+    } else {
+        null
+    }
+
+    Kit.Page(
+        title = if (selectionMode) "已选择 ${selected.size} 个" else "应用",
+        subtitle = if (selectionMode) "" else "${all.size} 个应用",
+        navigation = closeAction,
+        actions = {
+            // 参考项目的做法：右上角一个 SelectAll，非多选时进入多选，多选时全选/取消全选
+            IconButton(
+                onClick = {
+                    if (selectionMode) {
+                        selected = if (allSelected) emptySet() else visiblePkgs.toSet()
+                    } else {
+                        selectionMode = true
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.SelectAll,
+                    contentDescription = if (allSelected) "取消全选" else "全选"
+                )
+            }
+        }
+    ) {
         item {
             TextField(
                 value = query,
@@ -449,6 +496,35 @@ fun AppsScreen(ctx: Context) {
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+
+        if (selectionMode) {
+            item {
+                Kit.Group {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            text = "启用选中",
+                            onClick = { UiState.setAppsDisabled(selected, false) },
+                            enabled = selected.isNotEmpty()
+                        )
+                        TextButton(
+                            text = "停用选中",
+                            onClick = { UiState.setAppsDisabled(selected, true) },
+                            enabled = selected.isNotEmpty()
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = if (selected.isEmpty()) "点一行勾选" else "已选 ${selected.size}",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                    }
+                }
+            }
         }
 
         item { Kit.Section("全局") }
@@ -492,38 +568,85 @@ fun AppsScreen(ctx: Context) {
             item { Kit.Section("已安装", "${installedList.size} 个") }
         }
         items(installedList, key = { it.first }) { (pkg, count) ->
-            AppRow(ctx = ctx, pkg = pkg, count = count, installed = true)
+            AppRow(
+                ctx = ctx,
+                pkg = pkg,
+                count = count,
+                installed = true,
+                selectionMode = selectionMode,
+                checked = pkg in selected,
+                onToggle = {
+                    selected = if (pkg in selected) selected - pkg else selected + pkg
+                }
+            )
         }
 
         if (missingList.isNotEmpty()) {
             item { Kit.Section("未安装", "${missingList.size} 个 · 不计入首页统计") }
             items(missingList, key = { it.first }) { (pkg, count) ->
-                AppRow(ctx = ctx, pkg = pkg, count = count, installed = false)
+                AppRow(
+                    ctx = ctx,
+                    pkg = pkg,
+                    count = count,
+                    installed = false,
+                    selectionMode = selectionMode,
+                    checked = pkg in selected,
+                    onToggle = {
+                        selected = if (pkg in selected) selected - pkg else selected + pkg
+                    }
+                )
             }
         }
     }
 }
 
-/** 应用列表的一行：图标 + 名字 + 规则数 + 右侧总开关 + 箭头进详情 */
+/** 应用列表的一行：图标 + 名字 + 规则数 + 右侧总开关 + 箭头进详情；多选时换成复选框 */
 @Composable
-private fun AppRow(ctx: Context, pkg: String, count: Int, installed: Boolean) {
+private fun AppRow(
+    ctx: Context,
+    pkg: String,
+    count: Int,
+    installed: Boolean,
+    selectionMode: Boolean = false,
+    checked: Boolean = false,
+    onToggle: () -> Unit = {}
+) {
     val tasks = UiState.tasksOf(pkg).size
-    Kit.ArrowItem(
-        title = UiState.labelOf(pkg),
-        summary = buildString {
-            append("$count 条规则")
-            if (tasks > 0) append(" · $tasks 个任务")
-            if (!installed) append(" · 未安装")
-        },
-        start = { AppIcon(pkg) },
-        onClick = { Navigator.go(Dest.AppDetail(pkg)) },
-        end = {
-            Switch(
-                checked = !UiState.appDisabled(pkg),
-                onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
-            )
-        }
-    )
+    val summary = buildString {
+        append("$count 条规则")
+        if (tasks > 0) append(" · $tasks 个任务")
+        if (!installed) append(" · 未安装")
+    }
+    if (selectionMode) {
+        Kit.PlainRow(
+            title = UiState.labelOf(pkg),
+            summary = summary,
+            start = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        state = if (checked) ToggleableState.On else ToggleableState.Off,
+                        onClick = null
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    AppIcon(pkg)
+                }
+            },
+            onClick = onToggle
+        )
+    } else {
+        Kit.ArrowItem(
+            title = UiState.labelOf(pkg),
+            summary = summary,
+            start = { AppIcon(pkg) },
+            onClick = { Navigator.go(Dest.AppDetail(pkg)) },
+            end = {
+                Switch(
+                    checked = !UiState.appDisabled(pkg),
+                    onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
+                )
+            }
+        )
+    }
 }
 
 /** 应用详情页里规则条目的摘要文案 */

@@ -223,6 +223,13 @@ object UiState {
         commit()
     }
 
+    /** 批量开关：多选里一次写盘 + 一次 commit，不逐条同步 */
+    fun setAppsDisabled(pkgs: Collection<String>, off: Boolean) {
+        val prefs = local ?: return
+        pkgs.forEach { Cfg.put(prefs, Cfg.appKey(it), off) }
+        commit()
+    }
+
     /** 清空某个应用的全部规则与任务 */
     fun clearApp(pkg: String) {
         val prefs = local ?: return
