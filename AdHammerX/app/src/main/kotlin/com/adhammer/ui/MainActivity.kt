@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
         UiState.init(this)
         UiPrefs.init(this)
         intent?.getStringExtra("snapshot")?.let { UiState.setSnapshot(it) }
+        // 调试用：adb shell am start ... --es tab STATS 可直接落到某个页签
+        applyTabExtra(intent)
 
         pickApk = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@registerForActivityResult
@@ -90,6 +92,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra("snapshot")?.let { UiState.setSnapshot(it) }
+        applyTabExtra(intent)
+    }
+
+    private fun applyTabExtra(intent: android.content.Intent?) {
+        val name = intent?.getStringExtra("tab") ?: return
+        runCatching { Navigator.switch(Navigator.Tab.valueOf(name.uppercase())) }
     }
 
     override fun onResume() {

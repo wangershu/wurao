@@ -31,3 +31,8 @@ jadx_out/
 sub/
 sub_raw.json
 *.apk
+
+# 本地截图
+shot_*.png
+crop_*.png
+ui.xml
