@@ -120,6 +120,22 @@ object UiState {
     var statApps by mutableStateOf<List<Pair<String, Long>>>(emptyList())
         private set
 
+    // ---------- 安装状态 ----------
+
+    /** 设备上已安装的包名集合（Android 11+ 需要 QUERY_ALL_PACKAGES 才能看全） */
+    var installed by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** 每个应用「有没有启用中的规则/任务」：pkg -> 启用条数 */
+    var enabledPerApp by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    /** 首页「已启用规则」：已安装 + 未单独关掉 + 至少一条启用规则的应用数 */
+    val ruleAppCount: Int
+        get() = enabledPerApp.count { (pkg, n) ->
+            n > 0 && !appDisabled(pkg) && (installed.isEmpty() || pkg in installed)
+        }
+
     private var service: XposedService? = null
 
     fun init(context: Context) {
@@ -162,6 +178,25 @@ object UiState {
         statKinds = StatsStore.byKind(p)
         statApps = StatsStore.byApp(p, 8)
     }
+
+    /**
+     * 刷新「设备上装了哪些包」。
+     *
+     * 一次性把全部包名捞出来再查，比对着 200 多个规则包名逐个 getApplicationInfo 快得多；
+     * 会在 IO 线程调用，别在主线程碰 PackageManager。
+     */
+    fun refreshInstalled(ctx: Context) {
+        val set = runCatching {
+            ctx.packageManager.getInstalledPackages(0).mapTo(HashSet()) { it.packageName }
+        }.onFailure {
+            android.util.Log.w("AdHammer", "getInstalledPackages failed", it)
+        }.getOrDefault(emptySet())
+        android.util.Log.i("AdHammer", "installed=${set.size}")
+        installed = set
+        refreshIndex()
+    }
+
+    fun isInstalled(pkg: String): Boolean = pkg in installed
 
     /** 清空统计（不动规则与日志） */
     fun clearStats() {
@@ -331,13 +366,19 @@ object UiState {
         val src = local ?: return
         val all = runCatching { src.all }.getOrNull() ?: return
         val list = ArrayList<Pair<String, Int>>()
+        val enabled = HashMap<String, Int>()
         all.keys.filter { it.startsWith("rules:") }.forEach { key ->
             val pkg = key.removePrefix("rules:")
             val packs = RuleStore.getRules(src, pkg)
             val n = packs.sumOf { it.rules.size }
             if (n > 0) list.add(pkg to n)
+            // 只数「启用中」的：包本身开着 + 规则本身开着，加上八戒任务
+            val n2 = packs.filter { it.isEnable }.sumOf { p -> p.rules.count { r -> r.isEnable } } +
+                RuleStore.getTasks(src, pkg).count { it.isEnable }
+            if (n2 > 0) enabled[pkg] = n2
         }
         appIndex = list.sortedByDescending { it.second }
+        enabledPerApp = enabled
         hosts = RuleStore.getHosts(src)
         hostCount = hosts.size
         logs = RuleStore.getLog(src).asReversed()

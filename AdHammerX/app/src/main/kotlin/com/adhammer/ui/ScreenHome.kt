@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.TouchApp
@@ -28,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -41,7 +43,9 @@ import com.adhammer.BuildConfig
 import com.adhammer.float.FloatController
 import com.adhammer.rules.RuleStore
 import com.adhammer.rules.Subscriber
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -82,6 +86,8 @@ fun HomeScreen(ctx: Context) {
         floatOn = FloatController.enabled
         UiState.refreshLogs()
         UiState.refreshStats()
+        // 已安装集合决定「已启用规则」的计数口径和应用页的排序
+        withContext(Dispatchers.IO) { UiState.refreshInstalled(ctx) }
     }
 
     val ruleTotal = UiState.appIndex.sumOf { it.second }
@@ -89,9 +95,6 @@ fun HomeScreen(ctx: Context) {
 
     Kit.Page(
         title = "大圣净化",
-        actionIcon = MiuixIcons.Refresh,
-        actionDesc = "同步订阅规则",
-        onAction = { scope.launch { UiState.sync(ctx, subUrl) } },
         bottomExtra = 16.dp
     ) {
         // ---------- 状态网格 ----------
@@ -111,8 +114,8 @@ fun HomeScreen(ctx: Context) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     StatCard(
-                        title = "已适配应用",
-                        value = "${UiState.appIndex.size}",
+                        title = "已启用规则",
+                        value = "${UiState.ruleAppCount}",
                         modifier = Modifier.weight(1f),
                         onClick = { Navigator.switch(Navigator.Tab.APPS) }
                     )
@@ -126,8 +129,9 @@ fun HomeScreen(ctx: Context) {
             }
         }
 
-        // ---------- 未激活告警 ----------
+        // ---------- 激活 / 未激活：两种状态给两套信息 ----------
         if (!UiState.active) {
+            // 未激活：告警 + 排查步骤，告诉用户「差哪一步」
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -154,6 +158,52 @@ fun HomeScreen(ctx: Context) {
                         )
                     }
                 }
+            }
+            item {
+                Kit.Group {
+                    Text(
+                        text = "按顺序检查：",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onSurface
+                    )
+                    listOf(
+                        "① 在 LSPosed 里勾选本模块",
+                        "② 作用域里勾上要净化的应用",
+                        "③ 强制停止目标应用再打开（hook 只在进程启动时装）"
+                    ).forEach { step ->
+                        Text(
+                            text = step,
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            // 已激活：换成运行数据 —— 这时候用户关心的是「它拦了多少」
+            item { Kit.Section("近 7 天拦截") }
+            item {
+                Kit.Group {
+                    if (UiState.statDays.all { it.second == 0L }) {
+                        Text(
+                            text = "还没有命中记录。打开目标应用逛一圈，这里就会长出来。",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                    } else {
+                        BarChart(UiState.statDays)
+                    }
+                }
+            }
+            item {
+                Kit.ArrowItem(
+                    title = "查看统计明细",
+                    summary = "今日 ${UiState.statToday} · 累计 ${UiState.statTotal}",
+                    icon = MiuixIcons.Search,
+                    onClick = { Navigator.switch(Navigator.Tab.STATS) }
+                )
             }
         }
 
@@ -254,9 +304,13 @@ private fun StatusCard(active: Boolean, version: String, modifier: Modifier = Mo
         pressFeedbackType = PressFeedbackType.Tilt,
         showIndication = false
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        // clip：对勾水印是按参考项目那样「从右下角溢出去一点」摆的，
+        // 不裁就会跑出卡片边界压到旁边的数据卡上
+        Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))) {
             Box(
-                modifier = Modifier.fillMaxSize().offset(27.dp, 31.dp),
+                // 参考项目是 (27,31)，但它的卡片更宽，照搬会让勾的收笔正好压在裁切边上，
+                // 这里往左上收一点，留出安全边
+                modifier = Modifier.fillMaxSize().offset(12.dp, 16.dp),
                 contentAlignment = Alignment.BottomEnd
             ) {
                 // 参考项目用的是「描边圆圈 + 勾」的 drawable，不是 material 的实心 CheckCircle
@@ -362,10 +416,21 @@ fun AppsScreen(ctx: Context) {
     LaunchedEffect(UiState.appIndex) {
         UiState.ensureLabels(ctx, UiState.appIndex.map { it.first })
     }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { UiState.refreshInstalled(ctx) }
+    }
 
     val all = UiState.appIndex
     val list = if (query.isBlank()) all else all.filter { (pkg, _) ->
         pkg.contains(query, true) || UiState.labelOf(pkg).contains(query, true)
+    }
+    // 装了的排前面：没装的 app 规则留着，但既不在首页计数，也沉到列表底部。
+    // 包名表还没捞到时（首帧 / 个别 ROM 查不到）不做拆分，否则会把满屏都标成「未安装」。
+    val knownInstalled = UiState.installed.isNotEmpty()
+    val (installedList, missingList) = if (knownInstalled) {
+        list.partition { (pkg, _) -> UiState.isInstalled(pkg) }
+    } else {
+        list to emptyList()
     }
 
     Kit.Page(title = "应用", subtitle = "${all.size} 个应用") {
@@ -411,8 +476,6 @@ fun AppsScreen(ctx: Context) {
             }
         }
 
-        item { Kit.Section("应用", "${all.size} 个") }
-
         if (list.isEmpty()) {
             item {
                 Kit.Empty(
@@ -424,25 +487,43 @@ fun AppsScreen(ctx: Context) {
             }
         }
 
-        items(list, key = { it.first }) { (pkg, count) ->
-            val tasks = UiState.tasksOf(pkg).size
-            Kit.ArrowItem(
-                title = UiState.labelOf(pkg),
-                summary = buildString {
-                    append("$count 条规则")
-                    if (tasks > 0) append(" · $tasks 个任务")
-                },
-                start = { AppIcon(pkg) },
-                onClick = { Navigator.go(Dest.AppDetail(pkg)) },
-                end = {
-                    Switch(
-                        checked = !UiState.appDisabled(pkg),
-                        onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
-                    )
-                }
-            )
+        // 只有靠谱地知道「装了什么」时才分两组，否则一组平铺
+        if (knownInstalled && installedList.isNotEmpty()) {
+            item { Kit.Section("已安装", "${installedList.size} 个") }
+        }
+        items(installedList, key = { it.first }) { (pkg, count) ->
+            AppRow(ctx = ctx, pkg = pkg, count = count, installed = true)
+        }
+
+        if (missingList.isNotEmpty()) {
+            item { Kit.Section("未安装", "${missingList.size} 个 · 不计入首页统计") }
+            items(missingList, key = { it.first }) { (pkg, count) ->
+                AppRow(ctx = ctx, pkg = pkg, count = count, installed = false)
+            }
         }
     }
+}
+
+/** 应用列表的一行：图标 + 名字 + 规则数 + 右侧总开关 + 箭头进详情 */
+@Composable
+private fun AppRow(ctx: Context, pkg: String, count: Int, installed: Boolean) {
+    val tasks = UiState.tasksOf(pkg).size
+    Kit.ArrowItem(
+        title = UiState.labelOf(pkg),
+        summary = buildString {
+            append("$count 条规则")
+            if (tasks > 0) append(" · $tasks 个任务")
+            if (!installed) append(" · 未安装")
+        },
+        start = { AppIcon(pkg) },
+        onClick = { Navigator.go(Dest.AppDetail(pkg)) },
+        end = {
+            Switch(
+                checked = !UiState.appDisabled(pkg),
+                onCheckedChange = { UiState.setAppDisabled(pkg, !it) }
+            )
+        }
+    )
 }
 
 /** 应用详情页里规则条目的摘要文案 */
