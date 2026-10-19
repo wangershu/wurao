@@ -103,6 +103,33 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
 
+### 发布包（release）
+
+```bash
+./gradlew :app:assembleRelease     # 产物 app/build/outputs/apk/release/app-release.apk
+```
+
+签名从这四个变量读（环境变量优先，其次 `-P`）：
+
+| 变量 | 说明 |
+|---|---|
+| `RELEASE_STORE_FILE` | keystore 路径 |
+| `RELEASE_STORE_PASSWORD` | keystore 密码 |
+| `RELEASE_KEY_ALIAS` | 密钥别名（`adhammer`） |
+| `RELEASE_KEY_PASSWORD` | 密钥密码 |
+
+都没配时会自动退回 debug 签名，构建不会失败。
+
+### CI / 发版
+
+- push 到 `main` → `Build Debug APK`
+- push tag `v*` → `Release APK`：`assembleRelease` → 上传 artifact → 自动建 GitHub Release 并附 APK
+   （签名 keystore 存在仓库 secrets：`SIGNING_KEYSTORE_BASE64` / `SIGNING_KEYSTORE_PASSWORD` /
+   `SIGNING_KEY_ALIAS` / `SIGNING_KEY_PASSWORD`）
+
+发版流程：改 `app/build.gradle.kts` 里的 `versionName`/`versionCode` →
+`git tag vX.Y.Z && git push origin vX.Y.Z`。
+
 ---
 
 ## 四、安装与使用
