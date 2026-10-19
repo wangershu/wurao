@@ -60,9 +60,12 @@ jobs:
         working-directory: AdHammerX
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      # 上传失败（比如账号 artifact 配额满了）不该把构建标红 —— 编译本身才是信号
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: adhammer-debug
           path: AdHammerX/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 3
           if-no-files-found: error
