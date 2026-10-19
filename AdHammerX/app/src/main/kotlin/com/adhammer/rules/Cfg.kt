@@ -21,6 +21,15 @@ object Cfg {
     /** 单个应用的开关：true = 这个应用完全不拦（白名单） */
     fun appKey(pkg: String) = "cfg:app:$pkg"
 
+    // ---- 子系统代号：详情页按「悟空 / 八戒 / 沙僧」三块分别开关 ----
+
+    const val SUB_WU_KONG = "wk"
+    const val SUB_BA_JIE = "bj"
+    const val SUB_SHA_SENG = "ss"
+
+    /** 单个应用下某个子系统的开关：true = 这个应用不装这个子系统 */
+    fun subKey(pkg: String, sub: String) = "cfg:off:$sub:$pkg"
+
     fun get(prefs: SharedPreferences?, key: String, def: Boolean = true): Boolean =
         runCatching { prefs?.getBoolean(key, def) }.getOrNull() ?: def
 

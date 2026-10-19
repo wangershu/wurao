@@ -1,5 +1,6 @@
 package com.adhammer.hook
 
+import com.adhammer.rules.Cfg
 import com.adhammer.util.HLog
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -56,14 +57,14 @@ class AdHammerModule : XposedModule() {
 
         HLog.i("install hooks: ${RuntimeCfg.summary(pkg)}")
         FeatureGuard.runAll(pkg) {
-            if (RuntimeCfg.wuKong) {
+            if (RuntimeCfg.wuKong && !RuntimeCfg.subOff(pkg, Cfg.SUB_WU_KONG)) {
                 add("悟空-Activity") { WuKong.installActivity(this@AdHammerModule, pkg, cl) }
                 add("悟空-View") { WuKong.installViews(this@AdHammerModule, pkg, cl) }
                 add("悟空-URL") { WuKong.installUrl(this@AdHammerModule, pkg, cl) }
                 add("悟空-组件") { WuKong.installComponent(this@AdHammerModule, pkg, cl) }
                 add("悟空-文件替换") { WuKong.installReplace(this@AdHammerModule, pkg) }
             }
-            if (RuntimeCfg.shaSeng) {
+            if (RuntimeCfg.shaSeng && !RuntimeCfg.subOff(pkg, Cfg.SUB_SHA_SENG)) {
                 add("沙僧-DNS") { ShaSeng.install(this@AdHammerModule, pkg, cl) }
             }
         }

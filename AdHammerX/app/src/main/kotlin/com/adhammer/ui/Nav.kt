@@ -21,7 +21,22 @@ sealed interface Dest {
 
     // ---- 应用管理 ----
     data object Apps : Dest
+
+    /**
+     * 应用详情：按「悟空 / 八戒 / 沙僧」三个子系统分块。
+     * 对齐原版的层级 —— 拦截模式 → App → 该 App 的规则。
+     */
     data class AppDetail(val pkg: String) : Dest
+
+    /** 悟空：某一类规则的列表（通用 / URL / View / 组件 / 文件） */
+    data class RuleList(val pkg: String, val ruleType: Int) : Dest
+
+    /** 八戒：该应用的任务列表 */
+    data class TaskList(val pkg: String) : Dest
+
+    /** 沙僧：只对这一个应用生效的域名 */
+    data class AppHosts(val pkg: String) : Dest
+
     /** index = -1 表示新建 */
     data class RuleEdit(val pkg: String, val ruleType: Int, val index: Int) : Dest
     data class HomeAct(val pkg: String) : Dest

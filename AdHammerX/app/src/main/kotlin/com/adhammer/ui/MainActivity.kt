@@ -133,6 +133,27 @@ class MainActivity : ComponentActivity() {
                     Navigator.go(Dest.AppDetail(pkg))
                     Navigator.go(Dest.HomeAct(pkg))
                 }
+                // 调试用：rulelist:<pkg>:<type> / tasklist:<pkg> / apphosts:<pkg>
+                dest.startsWith("rulelist:") -> {
+                    val rest = dest.removePrefix("rulelist:")
+                    val pkg = rest.substringBeforeLast(':')
+                    val type = rest.substringAfterLast(':').toInt()
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.AppDetail(pkg))
+                    Navigator.go(Dest.RuleList(pkg, type))
+                }
+                dest.startsWith("tasklist:") -> {
+                    val pkg = dest.removePrefix("tasklist:")
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.AppDetail(pkg))
+                    Navigator.go(Dest.TaskList(pkg))
+                }
+                dest.startsWith("apphosts:") -> {
+                    val pkg = dest.removePrefix("apphosts:")
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.AppDetail(pkg))
+                    Navigator.go(Dest.AppHosts(pkg))
+                }
             }
         }
     }
@@ -244,6 +265,9 @@ private fun DetailLayer(
 ) {
     when (dest) {
         is Dest.AppDetail -> AppDetailScreen(ctx, dest.pkg)
+        is Dest.RuleList -> RuleListScreen(ctx, dest.pkg, dest.ruleType)
+        is Dest.TaskList -> TaskListScreen(ctx, dest.pkg)
+        is Dest.AppHosts -> AppHostsScreen(ctx, dest.pkg)
         is Dest.RuleEdit -> RuleEditScreen(ctx, dest.pkg, dest.ruleType, dest.index)
         is Dest.HomeAct -> HomeActScreen(ctx, dest.pkg)
         Dest.Hosts -> HostsScreen(ctx)

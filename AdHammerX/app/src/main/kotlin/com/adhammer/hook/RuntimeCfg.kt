@@ -33,12 +33,14 @@ object RuntimeCfg {
     private val cache = HashMap<String, List<RulePack>>()
     private val taskCache = HashMap<String, List<Task>>()
     private var hostsCache: List<String> = emptyList()
+    private val appHostCache = HashMap<String, List<String>>()
     private var autoSkipCache: Set<String> = emptySet()
 
     fun init(p: SharedPreferences?) {
         prefs = p
         cache.clear()
         taskCache.clear()
+        appHostCache.clear()
         // 首页 Activity 由 UI 写在同一个远程偏好里，这里一起接管
         HomeConfig.attach(p)
         pause = Cfg.get(p, Cfg.PAUSE, false)
@@ -66,10 +68,24 @@ object RuntimeCfg {
     val hosts: List<String> get() = hostsCache
     val autoSkip: Set<String> get() = autoSkipCache
 
-    fun hasAnyRule(pkg: String): Boolean = packsOf(pkg).isNotEmpty()
+    /** 沙僧：全局域名 + 该应用专属域名（去重后一起拦） */
+    fun hostsFor(pkg: String): List<String> =
+        appHostCache.getOrPut(pkg) {
+            val mine = RuleStore.getAppHosts(prefs, pkg)
+            if (mine.isEmpty()) hostsCache else (hostsCache + mine).distinct()
+        }
+
+    /** 该应用是否装了任何东西：悟空规则 / 八戒任务 / 沙僧专属域名，有一个就值得 hook */
+    fun hasAnyRule(pkg: String): Boolean =
+        packsOf(pkg).isNotEmpty() ||
+            RuleStore.getTasks(prefs, pkg).isNotEmpty() ||
+            RuleStore.getAppHosts(prefs, pkg).isNotEmpty()
 
     /** 该应用是否被单独关掉（白名单） */
     fun appOff(pkg: String): Boolean = Cfg.get(prefs, Cfg.appKey(pkg), false)
+
+    /** 该应用的某个子系统是否被单独关掉（悟空 / 八戒 / 沙僧 分级开关） */
+    fun subOff(pkg: String, sub: String): Boolean = Cfg.get(prefs, Cfg.subKey(pkg, sub), false)
 
     /** 规则统计，供日志与自检 */
     fun summary(pkg: String): String {

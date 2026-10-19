@@ -40,6 +40,8 @@ class BaJieService : AccessibilityService() {
                 // 页面切换时尝试匹配任务
                 val p = pkg ?: return
                 if (!com.adhammer.ui.UiState.baJieOn) return
+                // 应用级细分开关：这个应用单独关掉了八戒
+                if (com.adhammer.ui.UiState.subOff(p, com.adhammer.rules.Cfg.SUB_BA_JIE)) return
                 val tasks = com.adhammer.ui.UiState.tasksOf(p)
                 if (tasks.isEmpty()) return
                 val a = act ?: return

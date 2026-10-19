@@ -17,7 +17,8 @@ import com.google.gson.reflect.TypeToken
  * key 约定：
  * - `rules:<pkg>`  → 该包的悟空规则（RulePack 列表 JSON）
  * - `tasks:<pkg>`  → 该包的八戒任务（Task 列表 JSON）
- * - `hosts`        → 沙僧全局 host 列表
+ * - `hosts`        → 沙僧全局 host 列表（订阅同步，对所有应用生效）
+ * - `hosts:<pkg>`  → 沙僧按应用的 host 列表（手工 / 分析器添加，只对这一个应用生效）
  * - `autoskip`     → 八戒智能跳过白名单（包名集合）
  * - `meta:*`       → 订阅元信息
  */
@@ -27,6 +28,7 @@ object RuleStore {
     private const val PREFIX_RULES = "rules:"
     private const val PREFIX_TASKS = "tasks:"
     private const val KEY_HOSTS = "hosts"
+    private const val PREFIX_HOSTS = "hosts:"
     private const val KEY_AUTOSKIP = "autoskip"
     private const val PREFIX_HOME = "home:"
     private const val PREFIX_TIPS = "tips:"
@@ -114,6 +116,39 @@ object RuleStore {
 
     fun putHosts(prefs: SharedPreferences, hosts: List<String>) {
         runCatching { prefs.edit().putString(KEY_HOSTS, gson.toJson(hosts)).apply() }
+    }
+
+    // ---------- 沙僧：按应用的域名 ----------
+
+    fun putAppHosts(prefs: SharedPreferences, pkg: String, hosts: List<String>) {
+        runCatching {
+            if (hosts.isEmpty()) prefs.edit().remove(PREFIX_HOSTS + pkg).apply()
+            else prefs.edit().putString(PREFIX_HOSTS + pkg, gson.toJson(hosts)).apply()
+        }.onFailure { HLog.e("putAppHosts failed $pkg", it) }
+    }
+
+    fun getAppHosts(prefs: SharedPreferences?, pkg: String): List<String> {
+        val json = runCatching { prefs?.getString(PREFIX_HOSTS + pkg, null) }.getOrNull()
+            ?: return emptyList()
+        return runCatching {
+            gson.fromJson<List<String>>(json, object : TypeToken<List<String>>() {}.type)
+        }.getOrElse { emptyList() }
+    }
+
+    /** 按应用的域名追加去重，返回新增条数 */
+    fun mergeAppHosts(prefs: SharedPreferences, pkg: String, incoming: List<String>): Int {
+        if (incoming.isEmpty()) return 0
+        val old = getAppHosts(prefs, pkg).toMutableList()
+        var added = 0
+        incoming.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }
+            .forEach { h ->
+                if (!old.contains(h)) {
+                    old.add(h)
+                    added++
+                }
+            }
+        if (added > 0) putAppHosts(prefs, pkg, old)
+        return added
     }
 
     fun putAutoSkip(prefs: SharedPreferences, pkgs: Set<String>) {

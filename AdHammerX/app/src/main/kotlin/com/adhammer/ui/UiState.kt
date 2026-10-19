@@ -64,6 +64,19 @@ object UiState {
     var hosts by mutableStateOf<List<String>>(emptyList())
         private set
 
+    /** 沙僧按应用的域名：pkg -> 只对它生效的域名列表 */
+    var appHosts by mutableStateOf<Map<String, List<String>>>(emptyMap())
+        private set
+
+    /**
+     * 规则版本号。
+     *
+     * 规则读的是 SharedPreferences（不是 Compose state），写完之后列表页不会自己重组。
+     * 每次 commit() 都 +1，页面把它放进 remember 的 key 里就能跟着刷新。
+     */
+    var revision by mutableStateOf(0)
+        private set
+
     var taskCount by mutableStateOf(0)
         private set
 
@@ -237,6 +250,7 @@ object UiState {
             prefs.edit()
                 .remove("rules:$pkg")
                 .remove("tasks:$pkg")
+                .remove("hosts:$pkg")
                 .remove("home:$pkg")
                 .apply()
         }
@@ -372,28 +386,46 @@ object UiState {
     private fun refreshIndex() {
         val src = local ?: return
         val all = runCatching { src.all }.getOrNull() ?: return
+
+        // 应用维度：规则 / 任务 / 按应用域名 三种来源的包名并集
+        // （以前只扫 rules:，结果「只有八戒任务」或「只有域名」的应用进不了应用列表）
+        val pkgs = all.keys.mapNotNull { key ->
+            when {
+                key.startsWith("rules:") -> key.removePrefix("rules:")
+                key.startsWith("tasks:") -> key.removePrefix("tasks:")
+                key.startsWith("hosts:") -> key.removePrefix("hosts:")
+                else -> null
+            }
+        }.distinct()
+
         val list = ArrayList<Pair<String, Int>>()
         val enabled = HashMap<String, Int>()
-        all.keys.filter { it.startsWith("rules:") }.forEach { key ->
-            val pkg = key.removePrefix("rules:")
+        val hostsByPkg = HashMap<String, List<String>>()
+        var t = 0
+
+        pkgs.forEach { pkg ->
             val packs = RuleStore.getRules(src, pkg)
-            val n = packs.sumOf { it.rules.size }
-            if (n > 0) list.add(pkg to n)
-            // 只数「启用中」的：包本身开着 + 规则本身开着，加上八戒任务
+            val tasks = RuleStore.getTasks(src, pkg)
+            val mine = RuleStore.getAppHosts(src, pkg)
+            t += tasks.size
+            if (mine.isNotEmpty()) hostsByPkg[pkg] = mine
+
+            val total = packs.sumOf { it.rules.size } + tasks.size + mine.size
+            if (total > 0) list.add(pkg to total)
+
+            // 只数「启用中」的：包本身开着 + 规则本身开着，加上八戒任务与专属域名
             val n2 = packs.filter { it.isEnable }.sumOf { p -> p.rules.count { r -> r.isEnable } } +
-                RuleStore.getTasks(src, pkg).count { it.isEnable }
+                tasks.count { it.isEnable } + mine.size
             if (n2 > 0) enabled[pkg] = n2
         }
+
         appIndex = list.sortedByDescending { it.second }
         enabledPerApp = enabled
         hosts = RuleStore.getHosts(src)
         hostCount = hosts.size
+        appHosts = hostsByPkg
         logs = RuleStore.getLog(src).asReversed()
         refreshStats()
-        var t = 0
-        all.keys.filter { it.startsWith("tasks:") }.forEach { key ->
-            t += RuleStore.getTasks(src, key.removePrefix("tasks:")).size
-        }
         taskCount = t
     }
 
@@ -481,20 +513,25 @@ object UiState {
         return "已保存：规则 $n1 条 / 步骤 $n2 步 → $pkg"
     }
 
-    /** 分析器产出的规则：整批写入（同样走 merge，不动订阅规则） */
+    /**
+     * 分析器产出的规则：整批写入（同样走 merge，不动订阅规则）。
+     *
+     * 域名写进「按应用」的那份 —— 分析的是 A 应用，就不该污染全局黑名单。
+     */
     fun saveAnalyzed(pkg: String, packs: List<RulePack>, newHosts: List<String>): String {
         val prefs = local ?: return "本地存储未初始化"
         val n = RuleStore.mergeRules(prefs, pkg, packs)
         var nh = 0
         if (newHosts.isNotEmpty()) {
-            nh = RuleStore.mergeHosts(prefs, newHosts)
+            nh = RuleStore.mergeAppHosts(prefs, pkg, newHosts)
         }
         commit()
-        return "已保存 ${packs.sumOf { it.rules.size }} 条规则（新增 $n）+ $nh 个域名"
+        return "已保存 ${packs.sumOf { it.rules.size }} 条规则（新增 $n）+ $nh 个域名（仅对 $pkg 生效）"
     }
 
     // ==================== 沙僧 hosts ====================
 
+    /** 全局域名（订阅同步，所有应用生效） */
     fun addHost(host: String) {
         val h = host.trim().removePrefix("127.0.0.1 ").trim()
         if (h.isBlank() || hosts.contains(h)) return
@@ -506,6 +543,28 @@ object UiState {
     private fun saveHosts(list: List<String>) {
         val prefs = local ?: return
         RuleStore.putHosts(prefs, list)
+        commit()
+    }
+
+    // ---------- 沙僧：按应用的域名 ----------
+
+    fun appHostsOf(pkg: String): List<String> = appHosts[pkg] ?: emptyList()
+
+    /** 支持一次粘多条：空格 / 逗号 / 换行都能分隔，返回新增条数 */
+    fun addAppHosts(pkg: String, text: String): Int {
+        val incoming = text.split(Regex("[\\s,;]+"))
+            .map { it.trim().removePrefix("127.0.0.1 ").trim() }
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+        if (incoming.isEmpty()) return 0
+        val prefs = local ?: return 0
+        val n = RuleStore.mergeAppHosts(prefs, pkg, incoming)
+        if (n > 0) commit()
+        return n
+    }
+
+    fun removeAppHost(pkg: String, host: String) {
+        val prefs = local ?: return
+        RuleStore.putAppHosts(prefs, pkg, appHostsOf(pkg) - host)
         commit()
     }
 
@@ -572,10 +631,22 @@ object UiState {
             .onFailure { HLog.w("requestScope failed: ${it.message}") }
     }
 
-    /** 写本地之后的统一收尾：推远程 + 刷新索引 */
+    // ==================== 按应用的子系统开关 ====================
+
+    /** 这个应用是否单独关掉了某个子系统（悟空 / 八戒 / 沙僧） */
+    fun subOff(pkg: String, sub: String): Boolean = Cfg.get(local, Cfg.subKey(pkg, sub), false)
+
+    fun setSubOff(pkg: String, sub: String, off: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.subKey(pkg, sub), off)
+        commit()
+    }
+
+    /** 写本地之后的统一收尾：推远程 + 刷新索引 + 规则版本号 +1 */
     private fun commit() {
         remote?.let { pushLocalToRemote(it) }
         refreshIndex()
+        revision++
     }
 
     const val LOCAL_PACK = "本地编辑"

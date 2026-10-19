@@ -18,7 +18,8 @@ import java.net.InetAddress
 object ShaSeng {
 
     fun install(base: XposedInterface, pkg: String, cl: ClassLoader) {
-        val hosts = RuntimeCfg.hosts
+        // 全局订阅域名 + 这个应用自己加的域名
+        val hosts = RuntimeCfg.hostsFor(pkg)
         if (hosts.isEmpty()) return
 
         val blocked: (String) -> Boolean = { host ->

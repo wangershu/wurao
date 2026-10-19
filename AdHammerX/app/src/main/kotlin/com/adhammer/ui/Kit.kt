@@ -284,9 +284,18 @@ object Kit {
 
     // ---------------------------------------------------------------- 分组与行
 
-    /** 分组标题（SmallTitle，与 HyperIsland 的 SectionTitle 同款内边距） */
+    /**
+     * 分组标题（SmallTitle，与 HyperIsland 的 SectionTitle 同款内边距）。
+     *
+     * [end] 用来挂整组的开关（比如「悟空 / 八戒 / 沙僧」三个子系统各自的开关），
+     * 标题本身不可点，所以开关要自己接 onClick。
+     */
     @Composable
-    fun Section(text: String, extra: String = "") {
+    fun Section(
+        text: String,
+        extra: String = "",
+        end: (@Composable RowScope.() -> Unit)? = null
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -300,9 +309,14 @@ object Kit {
                 Text(
                     text = extra,
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(end = 18.dp)
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
+            }
+            if (end != null) {
+                Row(
+                    modifier = Modifier.padding(start = 8.dp, end = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) { end() }
             }
         }
     }
