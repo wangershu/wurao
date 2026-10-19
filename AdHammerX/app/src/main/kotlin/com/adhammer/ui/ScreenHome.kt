@@ -2,15 +2,22 @@ package com.adhammer.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,13 +29,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.adhammer.BuildConfig
 import com.adhammer.float.FloatController
 import com.adhammer.rules.RuleStore
 import com.adhammer.rules.Subscriber
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
@@ -36,19 +51,26 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Blocklist
 import top.yukonga.miuix.kmp.icon.extended.Link
-import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.ScreenCapture
 import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
-private val GREEN = Color(0xFF34C759)
-private val RED = Color(0xFFFF3B30)
-private val GREY = Color(0xFF8E8E93)
+// 状态卡配色，取自参考项目 HyperIsland 的 OverviewPage
+private val ACTIVE_COLOR = Color(0xFF36D167)
+private val ACTIVE_BG = Color(0xFFDFFAE4)
+private val INACTIVE_COLOR = Color(0xFFFF5A52)
+private val INACTIVE_BG = Color(0xFFFFE5E3)
+private val WARN_BG_LIGHT = Color(0xFFFFF3D6)
+private val WARN_FG_LIGHT = Color(0xFF704D00)
 
 /**
- * 主页：只做一件事 —— 让你一眼知道「模块现在有没有在工作」。
+ * 主页：一眼看出「模块现在有没有在工作」。
  *
- * 结构对齐 HyperIsland 的 Overview 页：状态卡 → 子系统 → 数据概览 → 常用入口。
+ * 版式照搬 HyperIsland 的 Overview：
+ * 顶部 1 大 + 2 小的状态网格（左大卡带对勾水印），下面接告警卡、信息卡、入口卡。
  */
 @Composable
 fun HomeScreen(ctx: Context) {
@@ -59,6 +81,7 @@ fun HomeScreen(ctx: Context) {
         FloatController.syncFrom(ctx)
         floatOn = FloatController.enabled
         UiState.refreshLogs()
+        UiState.refreshStats()
     }
 
     val ruleTotal = UiState.appIndex.sumOf { it.second }
@@ -66,114 +89,93 @@ fun HomeScreen(ctx: Context) {
 
     Kit.Page(
         title = "大圣净化",
-        subtitle = "AdHammer",
         actionIcon = MiuixIcons.Refresh,
         actionDesc = "同步订阅规则",
-        onAction = { scope.launch { UiState.sync(ctx, subUrl) } }
+        onAction = { scope.launch { UiState.sync(ctx, subUrl) } },
+        bottomExtra = 16.dp
     ) {
-        // ---------- 运行状态 ----------
-        item { Kit.Section("运行状态") }
-
+        // ---------- 状态网格 ----------
         item {
-            Kit.HeroCard(
-                ok = UiState.active,
-                title = if (UiState.active) "框架已接入" else "未检测到框架",
-                subtitle = if (UiState.active) {
-                    "${UiState.framework} · 规则已下发"
-                } else {
-                    "在 LSPosed 里启用模块并勾选作用域，再重启目标应用"
-                },
-                extra = if (UiState.active) "正常" else "待处理"
-            )
-        }
-
-        item {
-            Kit.RowGroup {
-                CheckRow("框架服务", UiState.active, UiState.framework)
-                CheckRow(
-                    "规则库",
-                    UiState.appIndex.isNotEmpty(),
-                    if (UiState.appIndex.isEmpty()) "还没有规则，先同步一次订阅" else "${UiState.appIndex.size} 个应用"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusCard(
+                    active = UiState.active,
+                    version = BuildConfig.VERSION_NAME,
+                    modifier = Modifier.weight(1f).aspectRatio(1f)
                 )
-                CheckRow(
-                    "无障碍服务",
-                    FloatController.accessibilityOn(ctx),
-                    if (FloatController.accessibilityOn(ctx)) "自动跳过可用" else "自动跳过需要开启"
-                )
-                CheckRow(
-                    "悬浮窗权限",
-                    FloatController.canOverlay(ctx),
-                    if (FloatController.canOverlay(ctx)) "抓快照可用" else "抓快照需要授权"
-                )
+                Column(
+                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StatCard(
+                        title = "已适配应用",
+                        value = "${UiState.appIndex.size}",
+                        modifier = Modifier.weight(1f),
+                        onClick = { Navigator.switch(Navigator.Tab.APPS) }
+                    )
+                    StatCard(
+                        title = "今日拦截",
+                        value = "${UiState.statToday}",
+                        modifier = Modifier.weight(1f),
+                        onClick = { Navigator.switch(Navigator.Tab.STATS) }
+                    )
+                }
             }
         }
 
-        // ---------- 三个子系统 ----------
-        item { Kit.Section("净化能力") }
-
-        item {
-            Kit.RowGroup {
-                SubsystemRow(
-                    icon = MiuixIcons.Blocklist,
-                    name = "页面净化",
-                    summary = "Activity / URL / View / 组件 / 文件替换 · $ruleTotal 条规则",
-                    on = !UiState.pause && UiState.wuKongOn
-                )
-                SubsystemRow(
-                    icon = MiuixIcons.Play,
-                    name = "自动跳过",
-                    summary = "无障碍自动点击 · ${UiState.taskCount} 个任务",
-                    on = !UiState.pause && UiState.baJieOn
-                )
-                SubsystemRow(
-                    icon = MiuixIcons.Link,
-                    name = "域名拦截",
-                    summary = "广告域名解析到 127.0.0.1 · ${UiState.hostCount} 个域名",
-                    on = !UiState.pause && UiState.shaSengOn
-                )
-                Kit.ArrowRow(
-                    title = "配置净化能力",
-                    summary = "三个子系统的开关与细节",
-                    onClick = {
-                        Navigator.switch(Navigator.Tab.SETTINGS)
-                        Navigator.go(Dest.SettingsPurify)
+        // ---------- 未激活告警 ----------
+        if (!UiState.active) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.defaultColors(
+                        color = WARN_BG_LIGHT,
+                        contentColor = WARN_FG_LIGHT
+                    ),
+                    showIndication = false
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "LSPosed 未接入",
+                            color = WARN_FG_LIGHT,
+                            style = MiuixTheme.textStyles.headline1,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用",
+                            color = WARN_FG_LIGHT.copy(alpha = 0.82f),
+                            style = MiuixTheme.textStyles.body2
+                        )
                     }
-                )
+                }
             }
         }
 
-        // ---------- 数据概览 ----------
-        item { Kit.Section("拦截概览") }
-
+        // ---------- 信息卡 ----------
         item {
-            Kit.Stats(
-                listOf(
-                    "${UiState.statToday}" to "今日",
-                    "${UiState.statWeek}" to "近 7 天",
-                    "${UiState.statTotal}" to "累计",
-                    "${UiState.appIndex.size}" to "净化应用"
-                )
-            )
-        }
-
-        item {
-            Kit.ArrowItem(
-                title = "统计详情",
-                summary = "趋势、占比与应用排行",
-                icon = AppIcons.Stats,
-                onClick = { Navigator.switch(Navigator.Tab.STATS) }
-            )
+            Kit.Group {
+                InfoText("系统版本", "Android ${Build.VERSION.RELEASE}")
+                InfoText("应用版本", "${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）")
+                InfoText("Hook 框架", if (UiState.active) "LSPosed 102 · ${UiState.framework}" else "未连接")
+                InfoText("规则库", "${UiState.appIndex.size} 个应用 · $ruleTotal 条规则 · ${UiState.hostCount} 个域名")
+                InfoText("设备型号", Build.MODEL, bottom = 0.dp)
+            }
         }
 
         // ---------- 常用 ----------
         item { Kit.Section("常用") }
-
         item {
             Kit.RowGroup {
                 Kit.SwitchRow(
                     title = "悬浮窗",
                     summary = "实时显示当前页面，抓取布局快照",
-                    icon = Icons.Default.TouchApp,
+                    icon = MiuixIcons.ScreenCapture,
                     checked = floatOn,
                     onChecked = {
                         floatOn = it
@@ -182,8 +184,8 @@ fun HomeScreen(ctx: Context) {
                 )
                 Kit.ArrowRow(
                     title = "无障碍服务",
-                    summary = "自动跳过依赖它，去系统设置里开启「大圣净化」",
-                    icon = Icons.Default.TouchApp,
+                    summary = if (FloatController.accessibilityOn(ctx)) "已开启，自动跳过可用" else "未开启，自动跳过不可用",
+                    icon = MiuixIcons.Unlock,
                     onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } }
                 )
                 Kit.ArrowRow(
@@ -191,6 +193,15 @@ fun HomeScreen(ctx: Context) {
                     summary = "最近同步：${UiState.lastSyncTime.ifBlank { "从未同步" }}",
                     icon = MiuixIcons.Link,
                     onClick = { scope.launch { UiState.sync(ctx, subUrl) } }
+                )
+                Kit.ArrowRow(
+                    title = "配置净化能力",
+                    summary = "三个子系统的开关与细节",
+                    icon = MiuixIcons.Blocklist,
+                    onClick = {
+                        Navigator.switch(Navigator.Tab.SETTINGS)
+                        Navigator.go(Dest.SettingsPurify)
+                    }
                 )
             }
         }
@@ -232,69 +243,113 @@ fun HomeScreen(ctx: Context) {
     }
 }
 
-/** 一行「检查项 + 状态点」 */
+/** 左侧大状态卡：对勾水印 + 状态 + 版本 */
 @Composable
-private fun CheckRow(label: String, ok: Boolean, detail: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+private fun StatusCard(active: Boolean, version: String, modifier: Modifier = Modifier) {
+    val color = if (active) ACTIVE_COLOR else INACTIVE_COLOR
+    val background = if (active) ACTIVE_BG else INACTIVE_BG
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.defaultColors(color = background),
+        pressFeedbackType = PressFeedbackType.Tilt,
+        showIndication = false
     ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
-            drawCircle(color = if (ok) GREEN else RED)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier.fillMaxSize().offset(27.dp, 31.dp),
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                // 参考项目用的是「描边圆圈 + 勾」的 drawable，不是 material 的实心 CheckCircle
+                OutlineCheck(tint = color.copy(alpha = 0.78f), size = 110.dp)
+            }
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                Text(
+                    text = if (active) "已激活" else "未激活",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF101010)
+                )
+                Text(
+                    text = "软件版本：$version",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (active) Color(0xFF101010) else color,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
-        Text(
-            text = label,
-            fontSize = 15.sp,
-            color = MiuixTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 10.dp)
+    }
+}
+
+/** 描边对勾圆圈水印：外圈圆 + 折线勾，笔宽按尺寸等比 */
+@Composable
+private fun OutlineCheck(tint: Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val stroke = this.size.minDimension * 0.062f
+        val r = this.size.minDimension / 2 - stroke / 2
+        drawCircle(
+            color = tint,
+            radius = r,
+            style = Stroke(width = stroke)
         )
-        Text(
-            text = detail,
-            fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier
-                .padding(start = 10.dp)
-                .weight(1f)
+        val path = Path().apply {
+            moveTo(this@Canvas.size.width * 0.295f, this@Canvas.size.height * 0.515f)
+            lineTo(this@Canvas.size.width * 0.445f, this@Canvas.size.height * 0.665f)
+            lineTo(this@Canvas.size.width * 0.715f, this@Canvas.size.height * 0.355f)
+        }
+        drawPath(
+            path = path,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
     }
 }
 
-/** 一行子系统状态 */
+/** 右侧小数据卡 */
 @Composable
-private fun SubsystemRow(
-    icon: ImageVector,
-    name: String,
-    summary: String,
-    on: Boolean
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+private fun StatCard(title: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        pressFeedbackType = PressFeedbackType.Tilt,
+        onClick = onClick
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (on) MiuixTheme.colorScheme.primary else GREY,
-            modifier = Modifier.size(22.dp)
-        )
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(text = name, fontSize = 15.sp, color = MiuixTheme.colorScheme.onSurface)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(14.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
-                text = summary,
-                fontSize = 11.sp,
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
+            Text(
+                text = value,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
-        Text(
-            text = if (on) "已开启" else "已关闭",
-            fontSize = 12.sp,
-            color = if (on) MiuixTheme.colorScheme.primary else GREY
-        )
     }
+}
+
+/** 信息卡里的「加粗标题 + 灰色内容」两行 */
+@Composable
+private fun InfoText(title: String, content: String, bottom: Dp = 24.dp) {
+    Text(
+        text = title,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Medium,
+        color = MiuixTheme.colorScheme.onSurface
+    )
+    Text(
+        text = content,
+        fontSize = 13.sp,
+        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        modifier = Modifier.padding(top = 2.dp, bottom = bottom)
+    )
 }
 
 /**
@@ -374,8 +429,6 @@ fun AppsScreen(ctx: Context) {
             Kit.ArrowItem(
                 title = UiState.labelOf(pkg),
                 summary = buildString {
-                    append(pkg)
-                    append(" · ")
                     append("$count 条规则")
                     if (tasks > 0) append(" · $tasks 个任务")
                 },

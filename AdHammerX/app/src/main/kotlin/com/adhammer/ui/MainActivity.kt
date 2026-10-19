@@ -14,17 +14,23 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.adhammer.float.FloatController
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
@@ -96,8 +102,34 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyTabExtra(intent: android.content.Intent?) {
-        val name = intent?.getStringExtra("tab") ?: return
-        runCatching { Navigator.switch(Navigator.Tab.valueOf(name.uppercase())) }
+        intent?.getStringExtra("tab")?.let { name ->
+            runCatching { Navigator.switch(Navigator.Tab.valueOf(name.uppercase())) }
+        }
+        // 调试用：--es dest appdetail:com.xxx / about / purify / homeact:com.xxx
+        val dest = intent?.getStringExtra("dest") ?: return
+        runCatching {
+            when {
+                dest == "about" -> {
+                    Navigator.switch(Navigator.Tab.SETTINGS)
+                    Navigator.go(Dest.About)
+                }
+                dest == "purify" -> {
+                    Navigator.switch(Navigator.Tab.SETTINGS)
+                    Navigator.go(Dest.SettingsPurify)
+                }
+                dest.startsWith("appdetail:") -> {
+                    val pkg = dest.removePrefix("appdetail:")
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.AppDetail(pkg))
+                }
+                dest.startsWith("homeact:") -> {
+                    val pkg = dest.removePrefix("homeact:")
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.AppDetail(pkg))
+                    Navigator.go(Dest.HomeAct(pkg))
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -125,10 +157,17 @@ private fun Root(ctx: Context, onPickApk: () -> Unit, onExport: () -> Unit, onIm
         val target = Navigator.tab.ordinal
         if (pagerState.currentPage != target) pagerState.animateScrollToPage(target)
     }
-    // 滑页 → 同步底栏选中
-    LaunchedEffect(pagerState.settledPage) {
-        val t = tabs[pagerState.settledPage]
-        if (Navigator.tab != t) Navigator.switch(t)
+    // 滑页 → 同步底栏选中。
+    // drop(1) 很关键：pager 首帧的 settledPage 可能还是 0，
+    // 不加就会在启动时把导航栈清成 HOME，使 --es dest 落到的二级页被弹回根页。
+    LaunchedEffect(Unit) {
+        snapshotFlow { pagerState.settledPage }
+            .drop(1)
+            .collect { page ->
+                val t = tabs[page]
+                // 二级页盖在 pager 上时不该改栈
+                if (Navigator.tab != t && Navigator.atRoot) Navigator.switch(t)
+            }
     }
 
     BackHandler(enabled = Navigator.canBack) { Navigator.back() }
@@ -139,17 +178,26 @@ private fun Root(ctx: Context, onPickApk: () -> Unit, onExport: () -> Unit, onIm
         containerColor = MiuixTheme.colorScheme.background,
         bottomBar = { if (Navigator.atRoot) BottomBar() }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1
-            ) { page ->
-                when (tabs[page]) {
-                    Navigator.Tab.HOME -> HomeScreen(ctx)
-                    Navigator.Tab.APPS -> AppsScreen(ctx)
-                    Navigator.Tab.STATS -> StatsScreen()
-                    Navigator.Tab.SETTINGS -> SettingsScreen(ctx, onExport, onImport)
+        // 根 padding 只取「底栏自身的高度」下发给列表；系统栏内边距交给各页自己的 Scaffold，
+        // 否则状态栏会被算两遍、整个顶栏下移一个状态栏高度（参考项目就是不套这层 padding 的）。
+        val navBarInset = with(LocalDensity.current) {
+            WindowInsets.navigationBars.getBottom(this).toDp()
+        }
+        val barInset = (padding.calculateBottomPadding() - navBarInset).coerceAtLeast(0.dp)
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            CompositionLocalProvider(Kit.LocalBottomBarInset provides barInset) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1
+                ) { page ->
+                    when (tabs[page]) {
+                        Navigator.Tab.HOME -> HomeScreen(ctx)
+                        Navigator.Tab.APPS -> AppsScreen(ctx)
+                        Navigator.Tab.STATS -> StatsScreen()
+                        Navigator.Tab.SETTINGS -> SettingsScreen(ctx, onExport, onImport)
+                    }
                 }
             }
 
@@ -168,7 +216,9 @@ private fun Root(ctx: Context, onPickApk: () -> Unit, onExport: () -> Unit, onIm
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(MiuixTheme.colorScheme.background)
+                            // miuix 的 background 是纯白（卡片色），页面底色是 surface，
+                            // 二级页要和根页同色，否则会「白一块」
+                            .background(MiuixTheme.colorScheme.surface)
                     ) {
                         DetailLayer(ctx, dest, onPickApk, onExport, onImport)
                     }
@@ -201,7 +251,7 @@ private fun DetailLayer(
         Dest.SettingsBackup -> BackupSettingsScreen(ctx, onExport, onImport)
         Dest.SettingsAdvanced -> AdvancedSettingsScreen(ctx)
         Dest.SettingsHelp -> HelpSettingsScreen()
-        Dest.About -> AboutScreen()
+        Dest.About -> AboutScreen(ctx)
         else -> Unit
     }
 }
@@ -221,7 +271,8 @@ private fun BottomBar() {
     val onSelect: (Int) -> Unit = { Navigator.switch(Navigator.Tab.entries[it]) }
 
     if (UiPrefs.floatingBar) {
-        FloatingNavigationBar(modifier = Modifier.fillMaxWidth()) {
+        // 不给 fillMaxWidth：参考项目的悬浮底栏是「刚好包住 4 个图标」的窄胶囊，不是通栏
+        FloatingNavigationBar {
             items.forEachIndexed { index, item ->
                 FloatingNavigationBarItem(
                     selected = selected == index,

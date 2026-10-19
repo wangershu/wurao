@@ -29,6 +29,7 @@ object RuleStore {
     private const val KEY_HOSTS = "hosts"
     private const val KEY_AUTOSKIP = "autoskip"
     private const val PREFIX_HOME = "home:"
+    private const val PREFIX_TIPS = "tips:"
     private const val KEY_LOG = "log:recent"
     private const val KEY_META_TIME = "meta:update_time"
     private const val KEY_META_URL = "meta:sub_url"
@@ -129,6 +130,17 @@ object RuleStore {
 
     fun getHome(prefs: SharedPreferences?, pkg: String): String? =
         runCatching { prefs?.getString(PREFIX_HOME + pkg, null) }.getOrNull()
+
+    /** 跳过成功时的提示文案（原版的 adTips）；空 = 用全局默认文案 */
+    fun putTips(prefs: SharedPreferences, pkg: String, tips: String) {
+        runCatching {
+            if (tips.isBlank()) prefs.edit().remove(PREFIX_TIPS + pkg).apply()
+            else prefs.edit().putString(PREFIX_TIPS + pkg, tips).apply()
+        }
+    }
+
+    fun getTips(prefs: SharedPreferences?, pkg: String): String? =
+        runCatching { prefs?.getString(PREFIX_TIPS + pkg, null) }.getOrNull()
 
     /** hosts 追加去重（手工/分析器新增的域名不能覆盖订阅的） */
     fun mergeHosts(prefs: SharedPreferences, incoming: List<String>): Int {

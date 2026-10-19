@@ -8,18 +8,18 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.theme.ThemeController
 
 /**
- * 应用主题：miuix 的 MIUI 配色，深浅色由 [UiPrefs.themeMode] 决定。
+ * 应用主题。
  *
- * 颜色一律从 MiuixTheme.colorScheme 取，业务代码里不硬编码色值 ——
- * 这样切深色、或以后接 Monet 取色，都不用改界面代码。
+ * 用 `MiuixTheme(controller = ThemeController(...))` 而不是自己传 colors ——
+ * 跟参考项目 HyperIsland 完全一致。之前传 colors 的写法会绕过 miuix 的
+ * 默认 typography（连带字体族），在这台机器上表现为数字全渲染成豆腐块。
  *
- * 顺带做 edge-to-edge：参考项目 HyperIsland 就是这么做的（系统栏透明、内容铺到底），
- * 不做的话顶部会多出一条系统栏留白的色带，跟参考站在一起会很明显。
+ * 顺带做 edge-to-edge：系统栏透明、内容铺到底，不做的话顶部会多一条色带。
  */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
@@ -42,8 +42,12 @@ fun AppTheme(content: @Composable () -> Unit) {
             )
         }
     }
-    MiuixTheme(
-        colors = if (dark) darkColorScheme() else lightColorScheme(),
-        content = content
+    val controller = ThemeController(
+        colorSchemeMode = when (UiPrefs.themeMode) {
+            ThemeMode.SYSTEM -> ColorSchemeMode.System
+            ThemeMode.LIGHT -> ColorSchemeMode.Light
+            ThemeMode.DARK -> ColorSchemeMode.Dark
+        }
     )
+    MiuixTheme(controller = controller, content = content)
 }

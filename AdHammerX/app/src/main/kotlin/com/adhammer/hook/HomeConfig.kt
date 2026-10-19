@@ -15,11 +15,14 @@ import com.adhammer.rules.RuleStore
 object HomeConfig {
 
     private const val PREFIX = "home:"
+    private const val TIPS_PREFIX = "tips:"
     private val cache = HashMap<String, String?>()
+    private val tipsCache = HashMap<String, String?>()
 
     fun attach(prefs: SharedPreferences?) {
         store = prefs
         cache.clear()
+        tipsCache.clear()
     }
 
     private var store: SharedPreferences? = null
@@ -36,5 +39,13 @@ object HomeConfig {
             prefs.edit().putString(PREFIX + pkg, home).apply()
             cache[pkg] = home
         }
+    }
+
+    /** 该应用自定义的跳过提示文案；没配就返回 null（由调用方决定用默认文案还是静默） */
+    fun tips(pkg: String): String? {
+        if (tipsCache.containsKey(pkg)) return tipsCache[pkg]
+        val v = runCatching { store?.getString(TIPS_PREFIX + pkg, null) }.getOrNull()
+        tipsCache[pkg] = v
+        return v
     }
 }

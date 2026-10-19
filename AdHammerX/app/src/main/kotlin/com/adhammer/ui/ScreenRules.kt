@@ -10,11 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,6 +31,13 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val RULE_TABS = listOf("通用", "URL", "View", "组件", "文件", "任务")
@@ -58,16 +60,16 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
         Kit.CompactBar(
             onBack = { Navigator.back() },
             actions = {
-                // 首页 Activity：at=3/4 跳过到首页时必须告诉模块「首页是哪个」
+                // 单个 App 的元信息：首页 Activity + 跳过提示文案
                 IconButton(onClick = { Navigator.go(Dest.HomeAct(pkg)) }) {
-                    Icon(imageVector = Icons.Default.Home, contentDescription = "首页 Activity")
+                    Icon(imageVector = MiuixIcons.Tune, contentDescription = "应用设置")
                 }
                 IconButton(onClick = { Navigator.go(Dest.RuleEdit(pkg, RULE_TYPES[tab], -1)) }) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "新增规则")
+                    Icon(imageVector = MiuixIcons.Add, contentDescription = "新增规则")
                 }
                 IconButton(onClick = { askClear = true }) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = MiuixIcons.Delete,
                         contentDescription = "清空这个应用的规则",
                         tint = MiuixTheme.colorScheme.error
                     )
@@ -119,9 +121,8 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
         ) {
             itemsIndexed(rules) { index, rule ->
                 Kit.Item(
-                    title = rule.ad?.takeIf { it.isNotBlank() } ?: "（未填主键）",
-                    summary = ruleSummary(rule.actionType, rule.ad, rule.displayRemark, rule.delay),
-                    icon = Icons.Default.Edit,
+                    title = shortNameOf(rule.ad),
+                    summary = compactSummary(rule),
                     onClick = { Navigator.go(Dest.RuleEdit(pkg, type, index)) },
                     onLongClick = { pendingDelete = index },
                     end = {
@@ -131,7 +132,7 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
                         )
                         IconButton(onClick = { pendingDelete = index }) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
+                                imageVector = MiuixIcons.Delete,
                                 contentDescription = "删除",
                                 tint = MiuixTheme.colorScheme.error
                             )
@@ -179,36 +180,158 @@ fun AppDetailScreen(ctx: Context, pkg: String) {
     }
 }
 
+/** 列表里只显示短名：全限定名太长会把行挤成三行 */
+private fun shortNameOf(ad: String?): String {
+    val s = ad?.trim().orEmpty()
+    if (s.isBlank()) return "（未填主键）"
+    return when {
+        s == "*" -> "所有页面"
+        s.endsWith(".Url") -> s.removeSuffix(".Url") + " · URL"
+        s.endsWith(".Dialog") -> s.removeSuffix(".Dialog") + " · 弹框"
+        s.endsWith(".Hook") -> s.removeSuffix(".Hook") + " · Hook"
+        s.contains('.') -> s.substringAfterLast('.')
+        else -> s
+    }
+}
+
+/** 列表行的一行摘要：动作 + 延时 + 备注首行（截断，完整备注在编辑器里看） */
+private fun compactSummary(rule: RuleItem): String = buildString {
+    append(Actions.describe(rule.actionType))
+    if (rule.delay > 0) append(" · 延时 ${rule.delay}ms")
+    val remark = rule.displayRemark.substringBefore('\n').trim()
+    if (remark.isNotBlank()) {
+        append(" · ")
+        append(if (remark.length > 12) remark.take(12) + "…" else remark)
+    }
+}
+
 @Composable
 private fun TaskList(pkg: String) {
     val tasks = UiState.tasksOf(pkg)
+    var viewing by remember { mutableIntStateOf(-1) }
+    var pendingDelete by remember { mutableIntStateOf(-1) }
+
     if (tasks.isEmpty()) {
         Kit.Empty(text = "这个应用还没有八戒任务（订阅同步后会自动带过来）")
         return
     }
+
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = Kit.pad(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        itemsIndexed(tasks) { _, task ->
+        item {
+            Kit.ArrowRow(
+                title = if (tasks.all { it.isEnable }) "全部停用" else "全部启用",
+                summary = "共 ${tasks.size} 个任务 · 点开可看每个任务的步骤",
+                icon = MiuixIcons.Refresh,
+                onClick = {
+                    UiState.setAllTasksEnabled(pkg, !tasks.all { it.isEnable })
+                }
+            )
+        }
+        itemsIndexed(tasks) { index, task ->
             Kit.Item(
                 title = task.name?.takeIf { it.isNotBlank() } ?: (task.act ?: "任务"),
                 summary = buildString {
                     append("${task.steps.size} 步")
-                    task.act?.let { append(" · $it") }
-                    task.remark?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
+                    task.act?.let { append(" · ").append(it) }
                 },
-                onClick = null,
+                onClick = { viewing = index },
                 end = {
+                    Switch(
+                        checked = task.isEnable,
+                        onCheckedChange = { UiState.toggleTask(pkg, index, it) }
+                    )
+                    IconButton(onClick = { pendingDelete = index }) {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = "删除任务",
+                            tint = MiuixTheme.colorScheme.error
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    // 任务步骤只读详情：原版的步骤编辑要拖拽排序，这里先把「这条任务到底干嘛」讲清楚
+    val shown = tasks.getOrNull(viewing)
+    if (shown != null) {
+        OverlayDialog(
+            show = true,
+            title = shown.name?.takeIf { it.isNotBlank() } ?: "任务步骤",
+            onDismissRequest = { viewing = -1 }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                shown.act?.takeIf { it.isNotBlank() }?.let {
                     Text(
-                        text = if (task.isEnable) "启用" else "停用",
+                        text = it,
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                     )
                 }
-            )
+                shown.steps.forEachIndexed { i, step ->
+                    Text(
+                        text = "${i + 1}. ${stepSummary(step)}",
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                if (shown.steps.isEmpty()) {
+                    Text(
+                        text = "这条任务没有步骤，订阅源里可能是空的。",
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(text = "关闭", onClick = { viewing = -1 })
+                }
+            }
         }
+    }
+
+    if (pendingDelete >= 0) {
+        OverlayDialog(
+            show = true,
+            title = "删除这个任务？",
+            summary = tasks.getOrNull(pendingDelete)?.name ?: pkg,
+            onDismissRequest = { pendingDelete = -1 }
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(text = "取消", onClick = { pendingDelete = -1 })
+                TextButton(text = "删除", onClick = {
+                    UiState.deleteTask(pkg, pendingDelete)
+                    pendingDelete = -1
+                })
+            }
+        }
+    }
+}
+
+/** 八戒步骤的一行人话：定位方式 + 延迟 */
+private fun stepSummary(step: com.adhammer.rules.model.Step): String {
+    val target = when {
+        !step.clkTxt.isNullOrBlank() -> "点文本「${step.clkTxt}」"
+        !step.clkId.isNullOrBlank() -> "点 id ${step.clkId}"
+        !step.clkWv.isNullOrBlank() -> "点控件 ${step.clkWv}"
+        step.sx0 >= 0 && step.sy1 >= 0 -> "滑动 (${step.sx0},${step.sy0}) → (${step.sx1},${step.sy1})"
+        step.x >= 0 && step.y >= 0 -> "点坐标 (${step.x}, ${step.y})"
+        !step.t.isNullOrBlank() -> "定位「${step.t}」"
+        else -> "at=${step.at}"
+    }
+    return buildString {
+        append(target)
+        if (step.prs) append("（长按）")
+        if (step.d > 0) append(" · 延迟 ${step.d}ms")
+        if (step.c > 1) append(" · 重复 ${step.c} 次")
     }
 }
 
@@ -243,7 +366,7 @@ fun RuleEditScreen(ctx: Context, pkg: String, ruleType: Int, index: Int) {
                 if (index >= 0) {
                     IconButton(onClick = { askDelete = true }) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = MiuixIcons.Delete,
                             contentDescription = "删除",
                             tint = MiuixTheme.colorScheme.error
                         )
@@ -459,17 +582,18 @@ private fun saveFromJson(pkg: String, ruleType: Int, index: Int, json: String): 
     return UiState.saveRule(pkg, ruleType, index, item.copy(ruleType = ruleType, pkg = pkg))
 }
 
-/** 首页 Activity 配置：at=3 跳过到首页 / at=4 改写跳转时要用 */
+/** 单个 App 的元信息：首页 Activity（at=3/4 要用）+ 跳过提示文案（adTips） */
 @Composable
 fun HomeActScreen(ctx: Context, pkg: String) {
     var value by remember { mutableStateOf(UiState.homeOf(pkg)) }
+    var tips by remember { mutableStateOf(UiState.tipsOf(pkg)) }
     val launcher = remember(pkg) {
         runCatching { ctx.packageManager.getLaunchIntentForPackage(pkg)?.component?.className }.getOrNull() ?: ""
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Kit.Bar(
-            title = "首页 Activity",
+            title = "应用设置",
             subtitle = pkg,
             canBack = true,
             onBack = { Navigator.back() }
@@ -500,10 +624,36 @@ fun HomeActScreen(ctx: Context, pkg: String) {
             if (launcher.isNotBlank()) {
                 item { Kit.Note("系统记录的启动页：$launcher") }
             }
+
+            item { Kit.Section("跳过提示") }
+            item {
+                Kit.Group {
+                    TextField(
+                        value = tips,
+                        onValueChange = { tips = it },
+                        label = "提示文案",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(modifier = Modifier.padding(top = 12.dp)) {
+                        TextButton(
+                            text = "用默认",
+                            onClick = { tips = com.adhammer.hook.SkipTips.DEFAULT_TEXT }
+                        )
+                        TextButton(
+                            text = "不提示",
+                            onClick = { tips = "" },
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+            }
+            item { Kit.Note("留空 = 不弹提示；全局开关在「设置 → 净化行为 → 跳过时提示」。") }
+
             item {
                 Row(modifier = Modifier.padding(horizontal = Kit.H_PAD)) {
                     top.yukonga.miuix.kmp.basic.Button(onClick = {
                         UiState.setHome(pkg, value)
+                        UiState.setTips(pkg, tips)
                         Toast.makeText(ctx, "已保存", Toast.LENGTH_SHORT).show()
                         Navigator.back()
                     }) { Text(text = "保存") }

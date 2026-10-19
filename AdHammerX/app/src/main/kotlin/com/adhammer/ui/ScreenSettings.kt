@@ -33,6 +33,7 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Help
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Link
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Tune
@@ -160,6 +161,20 @@ fun PurifySettingsScreen() {
                     enabled = !UiState.pause,
                     checked = UiState.shaSengOn,
                     onChecked = { UiState.setFlag(Cfg.SHA_SENG, it) }
+                )
+            }
+        }
+
+        item { Kit.Section("反馈") }
+
+        item {
+            Kit.RowGroup {
+                Kit.SwitchRow(
+                    title = "跳过时提示",
+                    summary = "成功跳过广告后弹一句 Toast，文案可在应用详情里按 App 自定义",
+                    icon = MiuixIcons.Ok,
+                    checked = Cfg.get(UiState.local, Cfg.TIPS, true),
+                    onChecked = { UiState.setFlag(Cfg.TIPS, it) }
                 )
             }
         }
@@ -432,7 +447,7 @@ fun HelpSettingsScreen() {
                 HelpStep("1", "安装并打开本模块，在框架（LSPosed）里启用它。")
                 HelpStep("2", "勾选作用域：主页提示「未检测到框架」时，去高级页按应用申请，或在框架里手动勾选。")
                 HelpStep("3", "强制停止目标应用再重新打开 —— hook 只在进程启动时安装。")
-                HelpStep("4", "回到主页看「运行状态」，四个检查项应该都是绿的。")
+                HelpStep("4", "回到主页：状态卡显示「已激活」才算接通；显示「未激活」时看下面那条黄色提示写了什么原因。")
                 HelpStep("5", "打开目标应用逛一圈，再回统计页看有没有命中记录。")
             }
         }

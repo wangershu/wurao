@@ -84,6 +84,13 @@ object WuKong {
                 HLog.d("hit ad activity: $curActName at=${rule.actionType}")
                 HitLog.hit(pkg, curActName.substringAfterLast('.'), Actions.describe(rule.actionType), StatsStore.KIND_PAGE)
                 handleActivity(act, rule, pkg)
+                // 真的跳过了才提示；改跳转目标/自定义 Hook 这类不弹，避免误报
+                if (rule.actionType == Actions.CLOSE_ACT ||
+                    rule.actionType == Actions.SKIP_TO_HOME ||
+                    rule.actionType == Actions.DISABLE_ACT
+                ) {
+                    SkipTips.show(act, RuntimeCfg.prefs())
+                }
             }
             result
         }

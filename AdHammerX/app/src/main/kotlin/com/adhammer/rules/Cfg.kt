@@ -15,6 +15,9 @@ object Cfg {
     const val BA_JIE = "cfg:bajie"
     const val SHA_SENG = "cfg:shaseng"
 
+    /** 跳过成功时是否弹提示（原版的 adTips 行为） */
+    const val TIPS = "cfg:tips"
+
     /** 单个应用的开关：true = 这个应用完全不拦（白名单） */
     fun appKey(pkg: String) = "cfg:app:$pkg"
 

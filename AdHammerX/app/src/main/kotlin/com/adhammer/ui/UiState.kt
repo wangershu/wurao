@@ -461,6 +461,41 @@ object UiState {
         commit()
     }
 
+    // ==================== 八戒任务 CRUD ====================
+
+    /** 新增或更新一条任务（index 越界 = 追加） */
+    fun saveTask(pkg: String, index: Int, task: Task): Boolean {
+        val prefs = local ?: return false
+        val list = RuleStore.getTasks(prefs, pkg).toMutableList()
+        val stored = task.copy(pkg = pkg)
+        if (index in list.indices) list[index] = stored else list.add(stored)
+        RuleStore.putTasks(prefs, pkg, list)
+        commit()
+        return true
+    }
+
+    fun toggleTask(pkg: String, index: Int, enable: Boolean) {
+        val item = tasksOf(pkg).getOrNull(index) ?: return
+        saveTask(pkg, index, item.copy(isEnable = enable))
+    }
+
+    fun deleteTask(pkg: String, index: Int) {
+        val prefs = local ?: return
+        val list = RuleStore.getTasks(prefs, pkg).toMutableList()
+        if (index !in list.indices) return
+        list.removeAt(index)
+        RuleStore.putTasks(prefs, pkg, list)
+        commit()
+    }
+
+    /** 把一条任务整体启用/停用（详情页顶部的总开关） */
+    fun setAllTasksEnabled(pkg: String, enable: Boolean) {
+        val prefs = local ?: return
+        val list = RuleStore.getTasks(prefs, pkg).map { it.copy(isEnable = enable) }
+        RuleStore.putTasks(prefs, pkg, list)
+        commit()
+    }
+
     // ==================== 首页 Activity（at=3/4 用） ====================
 
     fun homeOf(pkg: String): String = RuleStore.getHome(local, pkg) ?: ""
@@ -468,6 +503,16 @@ object UiState {
     fun setHome(pkg: String, activity: String) {
         val prefs = local ?: return
         RuleStore.putHome(prefs, pkg, activity.trim())
+        commit()
+    }
+
+    // ==================== 跳过提示文案 ====================
+
+    fun tipsOf(pkg: String): String = RuleStore.getTips(local, pkg) ?: ""
+
+    fun setTips(pkg: String, tips: String) {
+        val prefs = local ?: return
+        RuleStore.putTips(prefs, pkg, tips.trim())
         commit()
     }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,6 +57,14 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 object Kit {
 
     val H_PAD = 12.dp
+
+    /**
+     * 根页底栏占用的高度。
+     *
+     * 根 Scaffold 不把 padding 套到 pager 上（否则状态栏内边距会被内层 Scaffold 再算一遍，
+     * 整个顶栏下移一个状态栏高度），底栏高度改由这里下发给列表，只在内容末尾留白。
+     */
+    val LocalBottomBarInset = compositionLocalOf { 0.dp }
 
     /** 行内边距（与 HyperIsland 的 SettingsItemMargin 一致） */
     private val ITEM_MARGIN = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
@@ -245,7 +254,7 @@ object Kit {
                 start = H_PAD,
                 top = padding.calculateTopPadding() + 8.dp,
                 end = H_PAD,
-                bottom = padding.calculateBottomPadding() + bottomExtra
+                bottom = padding.calculateBottomPadding() + LocalBottomBarInset.current + bottomExtra
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = content

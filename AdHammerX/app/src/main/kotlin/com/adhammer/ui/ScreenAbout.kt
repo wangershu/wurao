@@ -19,16 +19,18 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Community
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Link
+import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 关于页。
  *
- * 开发者与项目链接等信息**先占位**：现在还没定，等定下来只改 [PLACEHOLDER] 一处即可。
+ * 链接信息集中在 [REPO] / [RELEASES] / [ISSUES] 三个常量里，换仓库只改这三行。
  */
 @Composable
-fun AboutScreen() {
+fun AboutScreen(ctx: android.content.Context) {
     Kit.DetailPage(title = "关于", subtitle = "v${BuildConfig.VERSION_NAME}", onBack = { Navigator.back() }) {
         // 头部：图标 + 名字 + 版本
         item {
@@ -71,11 +73,16 @@ fun AboutScreen() {
         item {
             Kit.RowGroup {
                 Kit.ArrowRow(
-                    title = PLACEHOLDER,
-                    summary = "待补充",
+                    title = "GitHub",
+                    summary = "wangershu",
                     icon = MiuixIcons.Community,
-                    enabled = false,
-                    onClick = {}
+                    onClick = { openUrl(ctx, "https://github.com/wangershu") }
+                )
+                Kit.ArrowRow(
+                    title = "问题反馈",
+                    summary = "遇到规则失效、闪退，去 issues 提",
+                    icon = MiuixIcons.Messages,
+                    onClick = { openUrl(ctx, ISSUES) }
                 )
             }
         }
@@ -85,17 +92,15 @@ fun AboutScreen() {
             Kit.RowGroup {
                 Kit.ArrowRow(
                     title = "仓库",
-                    summary = PLACEHOLDER,
+                    summary = REPO,
                     icon = MiuixIcons.Link,
-                    enabled = false,
-                    onClick = {}
+                    onClick = { openUrl(ctx, REPO) }
                 )
                 Kit.ArrowRow(
                     title = "发布页",
-                    summary = PLACEHOLDER,
-                    icon = MiuixIcons.Link,
-                    enabled = false,
-                    onClick = {}
+                    summary = "下载最新 APK",
+                    icon = MiuixIcons.Download,
+                    onClick = { openUrl(ctx, RELEASES) }
                 )
             }
         }
@@ -134,7 +139,19 @@ fun AboutScreen() {
     }
 }
 
-private const val PLACEHOLDER = "待补充"
+private const val REPO = "https://github.com/wangershu/adhammer"
+private const val RELEASES = "https://github.com/wangershu/adhammer/releases"
+private const val ISSUES = "https://github.com/wangershu/adhammer/issues"
+
+/** 用系统浏览器打开链接；没有浏览器就静默失败，不弹崩溃 */
+private fun openUrl(ctx: android.content.Context, url: String) {
+    runCatching {
+        ctx.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
 
 @Composable
 private fun LibRow(name: String, desc: String) {
