@@ -1,19 +1,12 @@
 package com.adhammer.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import com.adhammer.rules.StatsStore
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -42,54 +35,49 @@ fun StatsScreen() {
         MiuixTheme.colorScheme.primary, C_VIEW, C_SKIP, C_HOST
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        SmallTitle(
-            text = "统计",
-            modifier = Modifier.padding(horizontal = Kit.H_PAD, vertical = 6.dp)
-        )
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = Kit.pad(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            item {
-                Kit.Stats(
-                    listOf(
-                        "${UiState.statToday}" to "今日",
-                        "${UiState.statWeek}" to "近 7 天",
-                        "${UiState.statTotal}" to "累计"
-                    )
+    Kit.Page(
+        title = "统计",
+        subtitle = "累计 ${UiState.statTotal} 次",
+        actionIcon = MiuixIcons.Refresh,
+        actionDesc = "刷新",
+        onAction = { UiState.refreshStats() }
+    ) {
+        item {
+            Kit.Stats(
+                listOf(
+                    "${UiState.statToday}" to "今日",
+                    "${UiState.statWeek}" to "近 7 天",
+                    "${UiState.statTotal}" to "累计"
                 )
-            }
+            )
+        }
 
-            item { Kit.Section("近 7 天趋势") }
-            item { Kit.Group { BarChart(UiState.statDays) } }
+        item { Kit.Section("近 7 天趋势") }
+        item { Kit.Group { BarChart(UiState.statDays) } }
 
-            item { Kit.Section("拦截类型占比") }
-            item { Kit.Group { RingChart(kinds, ringColors) } }
+        item { Kit.Section("拦截类型占比") }
+        item { Kit.Group { RingChart(kinds, ringColors) } }
 
-            item { Kit.Section("应用排行", "Top ${UiState.statApps.size}") }
-            if (UiState.statApps.isEmpty()) {
-                item { Kit.Empty(text = "还没有命中记录。模块生效后打开目标应用逛一圈，这里就会有数据。") }
-            } else {
-                item { Kit.Group { RankBars(UiState.statApps) } }
-            }
+        item { Kit.Section("应用排行", "Top ${UiState.statApps.size}") }
+        if (UiState.statApps.isEmpty()) {
+            item { Kit.Empty(text = "还没有命中记录。模块生效后打开目标应用逛一圈，这里就会有数据。") }
+        } else {
+            item { Kit.Group { RankBars(UiState.statApps) } }
+        }
 
-            item { Kit.Section("明细") }
-            item {
-                Kit.ArrowItem(
+        item { Kit.Section("明细") }
+        item {
+            Kit.RowGroup {
+                Kit.ArrowRow(
                     title = "拦截记录",
                     summary = "${UiState.logs.size} 条最近明细",
                     icon = MiuixIcons.Search,
                     onClick = { Navigator.go(Dest.Logs) }
                 )
-            }
-            item {
-                Kit.ArrowItem(
+                Kit.ArrowRow(
                     title = "清空统计数据",
                     summary = "只清计数，不动规则和日志",
-                    icon = MiuixIcons.Search,
+                    icon = MiuixIcons.Delete,
                     onClick = { UiState.clearStats() }
                 )
             }

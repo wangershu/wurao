@@ -57,6 +57,9 @@ object Navigator {
 
     val canBack: Boolean get() = stack.size > 1
 
+    /** 是否停在根页：是则显示底栏，否则显示二级页（对齐 HyperIsland 的 detail 层） */
+    val atRoot: Boolean get() = stack.size == 1
+
     fun go(dest: Dest) {
         stack.add(dest)
     }

@@ -6,16 +6,18 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -24,35 +26,124 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.RadioButton
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 /**
  * MIUI 风格通用组件。
  *
- * 统一规范（照 MIUI 设置页的写法）：
- * - 分组：SmallTitle 作为分组标题，组内用 Card 或 BasicComponent 列表
- * - 列表项：主标题 17sp 常规、副标题 13sp 次要色、右侧放开关或箭头
- * - 触控区：最小 48dp 高
- * - 圆角：统一用 miuix 默认的 CardDefaults.CornerRadius
+ * 结构与命名对齐参考项目 HyperIsland（同为 miuix 0.9.4）：
+ * - 根页骨架 [Page]：可折叠大标题 TopAppBar + LazyColumn
+ * - 二级页骨架 [DetailPage]：同上，左侧多一个返回键
+ * - 列表：[Section] 分组标题 + [RowGroup]（一整张 Card）+ [ArrowRow] / [SwitchRow] / [PlainRow]
+ * - 行内边距 18x14、左侧图标 tint = onBackground、右侧箭头 10x16 的 ArrowRight
  */
 object Kit {
 
-    val H_PAD = 16.dp
-    val LIST_PAD = PaddingValues(horizontal = 0.dp, vertical = 12.dp)
+    val H_PAD = 12.dp
+
+    /** 行内边距（与 HyperIsland 的 SettingsItemMargin 一致） */
+    private val ITEM_MARGIN = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
+
+    // ---------------------------------------------------------------- 页面骨架
 
     /**
-     * 紧凑标题栏。
+     * 根页骨架：大标题（滚动时折叠成小标题）+ 列表。
      *
-     * 用 SmallTopAppBar 而不是 TopAppBar：后者默认带大标题（largeTitle），
-     * 在列表型页面里会白占一大块高度。
+     * 对标 HyperIsland 的 CollapsingPage：TopAppBar 同时给 title 和 largeTitle，
+     * 配合 MiuixScrollBehavior 做折叠；列表统一 12dp 间距、底部留白由 [bottomExtra] 控制。
+     */
+    @Composable
+    fun Page(
+        title: String,
+        subtitle: String = "",
+        actionIcon: ImageVector? = null,
+        actionDesc: String = "",
+        onAction: (() -> Unit)? = null,
+        bottomExtra: Dp = 16.dp,
+        content: LazyListScope.() -> Unit
+    ) {
+        val scrollBehavior = MiuixScrollBehavior()
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = title,
+                    largeTitle = title,
+                    subtitle = subtitle,
+                    scrollBehavior = scrollBehavior,
+                    actions = {
+                        if (actionIcon != null && onAction != null) {
+                            IconButton(onClick = onAction) {
+                                Icon(imageVector = actionIcon, contentDescription = actionDesc)
+                            }
+                        }
+                    }
+                )
+            }
+        ) { padding ->
+            PageList(padding, scrollBehavior, bottomExtra, content)
+        }
+    }
+
+    /**
+     * 二级页骨架：与 [Page] 同构，多一个返回键（用 miuix 官方的 Back 图标）。
+     */
+    @Composable
+    fun DetailPage(
+        title: String,
+        onBack: () -> Unit,
+        subtitle: String = "",
+        actionIcon: ImageVector? = null,
+        actionDesc: String = "",
+        onAction: (() -> Unit)? = null,
+        actions: @Composable (RowScope.() -> Unit) = {},
+        bottomExtra: Dp = 28.dp,
+        content: LazyListScope.() -> Unit
+    ) {
+        val scrollBehavior = MiuixScrollBehavior()
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = title,
+                    largeTitle = title,
+                    subtitle = subtitle,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        actions()
+                        if (actionIcon != null && onAction != null) {
+                            IconButton(onClick = onAction) {
+                                Icon(imageVector = actionIcon, contentDescription = actionDesc)
+                            }
+                        }
+                    }
+                )
+            }
+        ) { padding ->
+            PageList(padding, scrollBehavior, bottomExtra, content)
+        }
+    }
+
+    /**
+     * 独立标题栏：给不适合改成 [DetailPage] 的页面用（正文里有嵌套列表、Tab 之类）。
+     * 与 [DetailPage] 用的是同一个 TopAppBar，只是不接滚动折叠。
      */
     @Composable
     fun Bar(
@@ -60,18 +151,16 @@ object Kit {
         subtitle: String = "",
         canBack: Boolean = false,
         onBack: (() -> Unit)? = null,
-        actions: @Composable RowScope.() -> Unit = {}
+        actions: @Composable (RowScope.() -> Unit) = {}
     ) {
-        SmallTopAppBar(
+        TopAppBar(
             title = title,
+            largeTitle = title,
             subtitle = subtitle,
             navigationIcon = {
                 if (canBack) {
                     IconButton(onClick = { onBack?.invoke() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
+                        Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
                     }
                 }
             },
@@ -79,104 +168,154 @@ object Kit {
         )
     }
 
-    /** 分组标题 */
+    @Composable
+    private fun PageList(
+        padding: PaddingValues,
+        scrollBehavior: ScrollBehavior,
+        bottomExtra: Dp,
+        content: LazyListScope.() -> Unit
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .overScrollVertical()
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            contentPadding = PaddingValues(
+                start = H_PAD,
+                top = padding.calculateTopPadding() + 8.dp,
+                end = H_PAD,
+                bottom = padding.calculateBottomPadding() + bottomExtra
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
+    }
+
+    // ---------------------------------------------------------------- 分组与行
+
+    /** 分组标题（SmallTitle，与 HyperIsland 的 SectionTitle 同款内边距） */
     @Composable
     fun Section(text: String, extra: String = "") {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = H_PAD, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SmallTitle(text = text, modifier = Modifier.weight(1f))
+            SmallTitle(
+                text = text,
+                modifier = Modifier.weight(1f),
+                insideMargin = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+            )
             if (extra.isNotBlank()) {
-                Text(text = extra, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text(
+                    text = extra,
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(end = 18.dp)
+                )
             }
         }
     }
 
-    /** 标准列表项（点击型） */
+    /** 一整张卡片里放若干行（HyperIsland 的设置页就是这么分组的） */
     @Composable
-    fun Item(
-        title: String,
-        summary: String = "",
-        icon: ImageVector? = null,
-        iconTint: Color = MiuixTheme.colorScheme.primary,
-        enabled: Boolean = true,
-        onClick: (() -> Unit)? = null,
-        onLongClick: (() -> Unit)? = null,
-        end: @Composable (RowScope.() -> Unit)? = null
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp),
-            // 点击交给 BasicComponent（自带 MIUI 的按压反馈），
-            // Card 只负责长按，否则两个 clickable 叠在一起会触发两次
-            insideMargin = PaddingValues(0.dp),
-            onLongPress = onLongClick,
-            pressFeedbackType = PressFeedbackType.None
-        ) {
-            BasicComponent(
-                title = title,
-                summary = summary.ifBlank { null },
-                enabled = enabled,
-                startAction = if (icon != null) {
-                    {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconTint,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                } else null,
-                endActions = end,
-                onClick = onClick
-            )
-        }
-    }
-
-    /**
-     * 带箭头的列表项（点进下一级）。
-     *
-     * 用 miuix-preference 的 `ArrowPreference` —— 右边那个箭头是 MIUI 设置里的同款，
-     * 自己画容易画歪。`endActions` 里还可以塞开关/徽章，会排在箭头前面。
-     */
-    @Composable
-    fun ArrowItem(
-        title: String,
-        summary: String = "",
-        icon: ImageVector? = null,
-        iconTint: Color = MiuixTheme.colorScheme.primary,
-        enabled: Boolean = true,
-        onClick: () -> Unit,
-        end: @Composable (RowScope.() -> Unit)? = null
-    ) {
+    fun RowGroup(content: @Composable ColumnScope.() -> Unit) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             insideMargin = PaddingValues(0.dp),
             pressFeedbackType = PressFeedbackType.None
         ) {
-            ArrowPreference(
-                title = title,
-                summary = summary.ifBlank { null },
-                enabled = enabled,
-                onClick = onClick,
-                startAction = if (icon != null) {
-                    {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconTint,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                } else null,
-                endActions = { if (end != null) end() }
+            Column(modifier = Modifier.fillMaxWidth(), content = content)
+        }
+    }
+
+    /** 带内边距的卡片（放图表、键值表、说明文字这类自定义内容） */
+    @Composable
+    fun Group(
+        modifier: Modifier = Modifier,
+        innerPadding: Dp = 16.dp,
+        content: @Composable ColumnScope.() -> Unit
+    ) {
+        Card(modifier = modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(innerPadding),
+                content = content
             )
         }
     }
 
-    /** 开关型列表项 */
+    /** 行左侧图标：右边留 16dp，颜色跟正文走（HyperIsland 的 SettingsIcon） */
     @Composable
-    fun SwitchItem(
+    private fun LeadingIcon(imageVector: ImageVector) {
+        Icon(
+            modifier = Modifier.padding(end = 16.dp),
+            imageVector = imageVector,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onBackground
+        )
+    }
+
+    /** 行右侧箭头：miuix 官方 ArrowRight，10x16 */
+    @Composable
+    private fun TrailingArrow(enabled: Boolean) {
+        Icon(
+            imageVector = MiuixIcons.Basic.ArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(width = 10.dp, height = 16.dp),
+            tint = if (enabled) {
+                MiuixTheme.colorScheme.onSurfaceVariantActions
+            } else {
+                MiuixTheme.colorScheme.disabledOnSurface
+            }
+        )
+    }
+
+    /** 普通行（可点，右侧可挂自定义内容） */
+    @Composable
+    fun PlainRow(
+        title: String,
+        summary: String = "",
+        icon: ImageVector? = null,
+        enabled: Boolean = true,
+        onClick: (() -> Unit)? = null,
+        end: @Composable (RowScope.() -> Unit)? = null
+    ) {
+        BasicComponent(
+            title = title,
+            summary = summary.ifBlank { null },
+            enabled = enabled,
+            startAction = icon?.let { { LeadingIcon(it) } },
+            endActions = { if (end != null) end() },
+            insideMargin = ITEM_MARGIN,
+            onClick = onClick
+        )
+    }
+
+    /** 带箭头的行（点进下一级） */
+    @Composable
+    fun ArrowRow(
+        title: String,
+        summary: String = "",
+        icon: ImageVector? = null,
+        enabled: Boolean = true,
+        onClick: () -> Unit,
+        end: @Composable (RowScope.() -> Unit)? = null
+    ) {
+        PlainRow(
+            title = title,
+            summary = summary,
+            icon = icon,
+            enabled = enabled,
+            onClick = onClick,
+            end = {
+                if (end != null) end()
+                TrailingArrow(enabled)
+            }
+        )
+    }
+
+    /** 带开关的行 */
+    @Composable
+    fun SwitchRow(
         title: String,
         summary: String = "",
         icon: ImageVector? = null,
@@ -184,7 +323,7 @@ object Kit {
         enabled: Boolean = true,
         onChecked: (Boolean) -> Unit
     ) {
-        Item(
+        PlainRow(
             title = title,
             summary = summary,
             icon = icon,
@@ -194,34 +333,88 @@ object Kit {
         )
     }
 
-    /**
-     * 单选列表（MIUI 设置里的「单选项」样式：整行可点，右侧圆点）。
-     * 放在同一张 Card 里，视觉上是一组而不是三张散卡。
-     */
+    /** 单选项行（放进 [RowGroup] 里构成一组） */
     @Composable
-    fun RadioGroup(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = H_PAD),
-            insideMargin = PaddingValues(0.dp),
-            pressFeedbackType = PressFeedbackType.None
+    fun RadioRow(text: String, selected: Boolean, onClick: () -> Unit) {
+        PlainRow(
+            title = text,
+            onClick = onClick,
+            end = { RadioButton(selected = selected, onClick = onClick) }
+        )
+    }
+
+    /** 键值行（放 [Group] 里） */
+    @Composable
+    fun KeyValue(key: String, value: String) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            items.forEachIndexed { i, text ->
-                BasicComponent(
-                    title = text,
-                    onClick = { onSelect(i) },
-                    endActions = {
-                        RadioButton(selected = i == selectedIndex, onClick = { onSelect(i) })
-                    }
-                )
-            }
+            Text(text = key, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text(
+                text = value,
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 12.dp)
+            )
         }
     }
+
+    // ---------------------------------------------------------------- 独立卡片项
+    // 下面三个是「一行一张卡」的写法，给不方便改成分组的页面用；
+    // 内部复用上面的 Row，所以样式（边距、箭头、图标）始终跟分组版一致。
+
+    @Composable
+    fun Item(
+        title: String,
+        summary: String = "",
+        icon: ImageVector? = null,
+        enabled: Boolean = true,
+        onClick: (() -> Unit)? = null,
+        onLongClick: (() -> Unit)? = null,
+        end: @Composable (RowScope.() -> Unit)? = null
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            insideMargin = PaddingValues(0.dp),
+            pressFeedbackType = PressFeedbackType.None,
+            onLongPress = onLongClick
+        ) {
+            PlainRow(title, summary, icon, enabled, onClick, end)
+        }
+    }
+
+    @Composable
+    fun ArrowItem(
+        title: String,
+        summary: String = "",
+        icon: ImageVector? = null,
+        enabled: Boolean = true,
+        onClick: () -> Unit,
+        end: @Composable (RowScope.() -> Unit)? = null
+    ) {
+        RowGroup { ArrowRow(title, summary, icon, enabled, onClick, end) }
+    }
+
+    @Composable
+    fun SwitchItem(
+        title: String,
+        summary: String = "",
+        icon: ImageVector? = null,
+        checked: Boolean,
+        enabled: Boolean = true,
+        onChecked: (Boolean) -> Unit
+    ) {
+        RowGroup { SwitchRow(title, summary, icon, checked, enabled, onChecked) }
+    }
+
+    // ---------------------------------------------------------------- 其它
 
     /** 统计格 */
     @Composable
     fun Stats(items: List<Pair<String, String>>) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = H_PAD),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items.forEach { (value, label) ->
@@ -251,7 +444,7 @@ object Kit {
     /** 空状态 */
     @Composable
     fun Empty(text: String, actionText: String? = null, onAction: (() -> Unit)? = null) {
-        Card(modifier = Modifier.fillMaxWidth().padding(horizontal = H_PAD)) {
+        Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -279,42 +472,11 @@ object Kit {
             text = text,
             fontSize = 12.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(horizontal = H_PAD + 4.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
         )
     }
 
-    /** 卡片容器（带内边距的分组内容） */
-    @Composable
-    fun Group(
-        modifier: Modifier = Modifier,
-        content: @Composable ColumnScope.() -> Unit
-    ) {
-        Card(modifier = modifier.fillMaxWidth().padding(horizontal = H_PAD)) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                content = content
-            )
-        }
-    }
-
-    /** 键值行 */
-    @Composable
-    fun KeyValue(key: String, value: String) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = key, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            Text(
-                text = value,
-                fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 12.dp)
-            )
-        }
-    }
-
-    /** 小徽章（状态/分类） */
+    /** 小徽章（状态 / 分类） */
     @Composable
     fun Tag(text: String, color: Color = MiuixTheme.colorScheme.primary) {
         Text(
@@ -327,18 +489,12 @@ object Kit {
 
     /** 顶部大状态卡 */
     @Composable
-    fun HeroCard(
-        ok: Boolean,
-        title: String,
-        subtitle: String,
-        extra: String = ""
-    ) {
-        Card(modifier = Modifier.fillMaxWidth().padding(horizontal = H_PAD)) {
+    fun HeroCard(ok: Boolean, title: String, subtitle: String, extra: String = "") {
+        Card(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 状态点：绿=已激活，红=未激活
                 androidx.compose.foundation.Canvas(modifier = Modifier.size(10.dp)) {
                     drawCircle(color = if (ok) Color(0xFF34C759) else Color(0xFFFF3B30))
                 }
@@ -356,12 +512,21 @@ object Kit {
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
-                if (extra.isNotBlank()) {
-                    Tag(text = extra)
-                }
+                if (extra.isNotBlank()) Tag(text = extra)
             }
         }
     }
 
+    /** 单选项组（整组一张卡，右侧圆点） */
+    @Composable
+    fun RadioGroup(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+        RowGroup {
+            items.forEachIndexed { i, text ->
+                RadioRow(text = text, selected = i == selectedIndex, onClick = { onSelect(i) })
+            }
+        }
+    }
+
+    /** 老页面用的内容边距，逐步迁移到 [Page] 之后可以删 */
     fun pad(horizontal: Dp = H_PAD) = PaddingValues(horizontal = horizontal, vertical = 12.dp)
 }

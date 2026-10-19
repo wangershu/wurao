@@ -6,18 +6,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import com.adhammer.float.FloatController
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -90,76 +98,137 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * 根容器，结构对齐 HyperIsland 的 AppShell：
+ * - 四个根页放在 HorizontalPager 里（可左右滑）
+ * - 底栏只在根页出现，进二级页时整层滑入覆盖（底栏收起）
+ */
 @Composable
 private fun Root(ctx: Context, onPickApk: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val tabs = Navigator.Tab.entries
+    val pagerState = rememberPagerState(
+        initialPage = Navigator.tab.ordinal,
+        pageCount = { tabs.size }
+    )
+
+    // 点底栏 → 滑到对应页
+    LaunchedEffect(Navigator.tab) {
+        val target = Navigator.tab.ordinal
+        if (pagerState.currentPage != target) pagerState.animateScrollToPage(target)
+    }
+    // 滑页 → 同步底栏选中
+    LaunchedEffect(pagerState.settledPage) {
+        val t = tabs[pagerState.settledPage]
+        if (Navigator.tab != t) Navigator.switch(t)
+    }
+
     BackHandler(enabled = Navigator.canBack) { Navigator.back() }
+
+    val detail = if (Navigator.atRoot) null else Navigator.current
 
     Scaffold(
         containerColor = MiuixTheme.colorScheme.background,
-        bottomBar = { BottomBar() }
+        bottomBar = { if (Navigator.atRoot) BottomBar() }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val d = Navigator.current) {
-                Dest.Home -> HomeScreen(ctx)
-                Dest.Apps -> AppsScreen(ctx)
-                is Dest.AppDetail -> AppDetailScreen(ctx, d.pkg)
-                is Dest.RuleEdit -> RuleEditScreen(ctx, d.pkg, d.ruleType, d.index)
-                is Dest.HomeAct -> HomeActScreen(ctx, d.pkg)
-                Dest.Hosts -> HostsScreen(ctx)
-                Dest.Analyzer -> AnalyzerScreen(ctx, onPickApk)
-                Dest.Factory -> FactoryScreen(ctx)
-                Dest.Stats -> StatsScreen()
-                Dest.Logs -> LogsScreen(ctx)
-                Dest.Settings -> SettingsScreen(ctx, onExport, onImport)
-                Dest.SettingsPurify -> PurifySettingsScreen()
-                Dest.SettingsAppearance -> AppearanceSettingsScreen(ctx)
-                Dest.SettingsSubscription -> SubscriptionSettingsScreen(ctx)
-                Dest.SettingsBackup -> BackupSettingsScreen(ctx, onExport, onImport)
-                Dest.SettingsAdvanced -> AdvancedSettingsScreen(ctx)
-                Dest.SettingsHelp -> HelpSettingsScreen()
-                Dest.About -> AboutScreen()
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1
+            ) { page ->
+                when (tabs[page]) {
+                    Navigator.Tab.HOME -> HomeScreen(ctx)
+                    Navigator.Tab.APPS -> AppsScreen(ctx)
+                    Navigator.Tab.STATS -> StatsScreen()
+                    Navigator.Tab.SETTINGS -> SettingsScreen(ctx, onExport, onImport)
+                }
+            }
+
+            AnimatedContent(
+                targetState = detail,
+                label = "detail-layer",
+                transitionSpec = {
+                    if (targetState != null) {
+                        (slideInHorizontally { it / 4 } + fadeIn()) togetherWith fadeOut()
+                    } else {
+                        fadeIn() togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
+                    }
+                }
+            ) { dest ->
+                if (dest != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MiuixTheme.colorScheme.background)
+                    ) {
+                        DetailLayer(ctx, dest, onPickApk, onExport, onImport)
+                    }
+                }
             }
         }
     }
 }
 
-private data class TabItem(val tab: Navigator.Tab, val label: String, val icon: ImageVector)
+/** 二级页分发 */
+@Composable
+private fun DetailLayer(
+    ctx: Context,
+    dest: Dest,
+    onPickApk: () -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit
+) {
+    when (dest) {
+        is Dest.AppDetail -> AppDetailScreen(ctx, dest.pkg)
+        is Dest.RuleEdit -> RuleEditScreen(ctx, dest.pkg, dest.ruleType, dest.index)
+        is Dest.HomeAct -> HomeActScreen(ctx, dest.pkg)
+        Dest.Hosts -> HostsScreen(ctx)
+        Dest.Analyzer -> AnalyzerScreen(ctx, onPickApk)
+        Dest.Factory -> FactoryScreen(ctx)
+        Dest.Logs -> LogsScreen(ctx)
+        Dest.SettingsPurify -> PurifySettingsScreen()
+        Dest.SettingsAppearance -> AppearanceSettingsScreen(ctx)
+        Dest.SettingsSubscription -> SubscriptionSettingsScreen(ctx)
+        Dest.SettingsBackup -> BackupSettingsScreen(ctx, onExport, onImport)
+        Dest.SettingsAdvanced -> AdvancedSettingsScreen(ctx)
+        Dest.SettingsHelp -> HelpSettingsScreen()
+        Dest.About -> AboutScreen()
+        else -> Unit
+    }
+}
 
+private data class TabItem(val label: String, val icon: ImageVector)
+
+/** 底栏：常规 / 悬浮两种，图标用 miuix 官方那套 */
 @Composable
 private fun BottomBar() {
     val items = listOf(
-        TabItem(Navigator.Tab.HOME, "主页", MiuixIcons.Home),
-        TabItem(Navigator.Tab.APPS, "应用", MiuixIcons.GridView),
-        TabItem(Navigator.Tab.STATS, "统计", AppIcons.Stats),
-        TabItem(Navigator.Tab.SETTINGS, "设置", MiuixIcons.Settings)
+        TabItem("主页", MiuixIcons.Home),
+        TabItem("应用", MiuixIcons.GridView),
+        TabItem("统计", AppIcons.Stats),
+        TabItem("设置", MiuixIcons.Settings)
     )
+    val selected = Navigator.tab.ordinal
+    val onSelect: (Int) -> Unit = { Navigator.switch(Navigator.Tab.entries[it]) }
 
     if (UiPrefs.floatingBar) {
         FloatingNavigationBar(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items.forEach { item ->
-                    FloatingNavigationBarItem(
-                        selected = Navigator.tab == item.tab,
-                        onClick = { Navigator.switch(item.tab) },
-                        icon = item.icon,
-                        label = item.label,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            items.forEachIndexed { index, item ->
+                FloatingNavigationBarItem(
+                    selected = selected == index,
+                    onClick = { onSelect(index) },
+                    icon = item.icon,
+                    label = item.label
+                )
             }
         }
     } else {
         NavigationBar {
-            items.forEach { item ->
+            items.forEachIndexed { index, item ->
                 NavigationBarItem(
-                    selected = Navigator.tab == item.tab,
-                    onClick = { Navigator.switch(item.tab) },
+                    selected = selected == index,
+                    onClick = { onSelect(index) },
                     icon = item.icon,
                     label = item.label
                 )
