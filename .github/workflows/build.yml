@@ -1,0 +1,59 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform 37 + build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          yes | sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" --sdk_root="${ANDROID_SDK_ROOT}"
+
+      # sdkmanager 建出的目录叫 android-37.0，AGP 只认 android-37，补一个软链
+      - name: Normalize platform directory name
+        run: |
+          set -e
+          if [ ! -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platforms/android-37" ]; then
+            for d in "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/platforms/android-37.*; do
+              [ -d "$d" ] && ln -sfn "$d" "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platforms/android-37" && break
+            done
+          fi
+          ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platforms"
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x AdHammerX/gradlew
+
+      - name: Assemble debug
+        working-directory: AdHammerX
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: adhammer-debug
+          path: AdHammerX/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

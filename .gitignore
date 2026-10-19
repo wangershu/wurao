@@ -1,0 +1,33 @@
+# ---------- Gradle / 构建产物 ----------
+.gradle/
+build/
+*/build/
+*/*/build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---------- 本地 SDK / 签名 ----------
+local.properties
+*.jks
+*.keystore
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# ---------- 系统文件 ----------
+.DS_Store
+Thumbs.db
+
+# ---------- 逆向中间产物 ----------
+# 原始 APK 与反编译输出不进仓库：体积大，而且是别人的付费应用
+extract/
+jadx_out/
+sub/
+sub_raw.json
+*.apk

@@ -1,0 +1,60 @@
+{
+  "version": "2026.10.1",
+  "updateTime": "2026-10-19",
+  "sdks": [
+    { "id": "pangle", "name": "穿山甲 / Pangle", "prefixes": ["com.bytedance.sdk.openadsdk", "com.bytedance.pangle", "com.bytedance.msdk", "com.ss.android.ad"] },
+    { "id": "gdt", "name": "腾讯优量汇 / GDT", "prefixes": ["com.qq.e.", "com.tencent.gdt", "com.qzone.ad"] },
+    { "id": "baidu", "name": "百度联盟 / 百青藤", "prefixes": ["com.baidu.mobads", "com.baidu.mobstat", "com.baidu.ad"] },
+    { "id": "admob", "name": "Google AdMob", "prefixes": ["com.google.android.gms.ads", "com.google.ads", "com.google.android.gms.internal.ads"] },
+    { "id": "kuaishou", "name": "快手联盟", "prefixes": ["com.kwad.sdk", "com.kuaishou.ad"] },
+    { "id": "sigmob", "name": "Sigmob", "prefixes": ["com.sigmob.sdk", "com.sigmob.wind"] },
+    { "id": "anythink", "name": "TopOn / AnyThink", "prefixes": ["com.anythink", "com.topon"] },
+    { "id": "mintegral", "name": "Mintegral", "prefixes": ["com.mintegral.msdk", "com.mbridge.msdk"] },
+    { "id": "vungle", "name": "Vungle / Liftoff", "prefixes": ["com.vungle.warren", "com.vungle.sdk"] },
+    { "id": "ironsource", "name": "ironSource", "prefixes": ["com.ironsource.sdk", "com.ironsource.mediationsdk"] },
+    { "id": "applovin", "name": "AppLovin", "prefixes": ["com.applovin.sdk", "com.applovin.mediation"] },
+    { "id": "unity", "name": "Unity Ads", "prefixes": ["com.unity3d.ads", "com.unity3d.services"] },
+    { "id": "facebook", "name": "Meta Audience Network", "prefixes": ["com.facebook.ads", "com.facebook.audience"] },
+    { "id": "jiguang", "name": "极光 / 友盟", "prefixes": ["cn.jiguang", "com.umeng", "com.umeng.analytics"] },
+    { "id": "huawei", "name": "华为广告 / HMS Ads", "prefixes": ["com.huawei.hms.ads", "com.huawei.openalliance.ad"] },
+    { "id": "xiaomi", "name": "小米广告", "prefixes": ["com.xiaomi.ad", "com.miui.ads"] },
+    { "id": "oppo", "name": "OPPO / vivo 联盟", "prefixes": ["com.oppo.mobilead", "com.vivo.ad", "com.unionpay.mobilead"] },
+    { "id": "adview", "name": "AdView / 多盟 / 有米", "prefixes": ["com.adview", "com.domob", "com.youmi", "net.youmi"] },
+    { "id": "inmobi", "name": "InMobi", "prefixes": ["com.inmobi"] },
+    { "id": "tapjoy", "name": "Tapjoy", "prefixes": ["com.tapjoy"] },
+    { "id": "fyber", "name": "Fyber / DT Exchange", "prefixes": ["com.fyber", "com.inneractive"] },
+    { "id": "chartboost", "name": "Chartboost", "prefixes": ["com.chartboost"] },
+    { "id": "adcolony", "name": "AdColony", "prefixes": ["com.adcolony"] },
+    { "id": "mopub", "name": "MoPub", "prefixes": ["com.mopub"] },
+    { "id": "tencentad", "name": "腾讯广告 SDK 通用", "prefixes": ["com.tencent.ad", "com.tencent.ads"] }
+  ],
+  "activityWords": [
+    "Ad", "Ads", "Advert", "Advertisement", "Splash", "SplashAd", "Interstitial",
+    "Reward", "Rewarded", "Banner", "Insert", "Popup", "Promote", "Promotion"
+  ],
+  "safeWords": [
+    "Main", "Home", "Launcher", "Index", "Tab", "Root", "Container", "Welcome",
+    "Guide", "Login", "Setting", "Mine", "Profile", "SplashScreen", "StartUp"
+  ],
+  "resWords": [
+    "skip", "skip_ad", "tv_skip", "btn_skip", "jump", "close", "iv_close", "ad_close",
+    "btn_close", "img_close", "ad_container", "ad_layout", "ad_root", "ad_fl", "ad_view",
+    "splash_ad", "splash_skip", "countdown", "count_down", "tt_splash", "mbridge_splash",
+    "ksad_splash", "gdt_splash", "ad_skip", "advert_close"
+  ],
+  "domainWords": [
+    "ad.", "ads.", "adx.", "advert", "adservice", "adlog", "admob", "doubleclick",
+    "googlesyndication", "gdt", "qpic", "union", "pangle", "bytedance", "snssdk",
+    "sigmob", "kuaishou", "ksad", "mobads", "tanx", "mmstat", "umeng", "jiguang",
+    "analytics", "tracking", "track.", "log.", "monitor", "stat.", "report.",
+    "mintegral", "applovin", "ironsource", "vungle", "unity3d", "inmobi", "adcolony",
+    "mopub", "chartboost", "tapjoy", "fyber", "adview", "domob", "youmi"
+  ],
+  "domainExclude": [
+    "googleapis", "gstatic", "google.com", "android.com", "w3.org", "schema",
+    "xmlns", "apache.org", "jetbrains", "kotlinlang", "github", "apple.com",
+    "microsoft", "okhttp", "squareup", "java", "javax", "kotlin", "androidx",
+    "alicdn", "alipay", "weixin", "wechat", "qq.com", "qlogo", "gtimg",
+    "xiaomi.com", "miui.com", "huawei.com", "hicloud", "oppomobile", "vivo.com"
+  ]
+}

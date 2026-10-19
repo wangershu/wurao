@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  大圣净化 / adhammer —— 图标主体：一把斜置的锤子（锤广告）。
+  所有顶点都控制在以 (54,54) 为圆心、半径 33dp 的可视安全圆内，
+  这样各家启动器的圆形/水滴/方形遮罩都不会裁到主体。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="45">
+
+        <!-- 锤柄：胶囊形，宽 14、长 36，上端插进锤头里 -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M54,48a7,7 0 0 1 7,7v22a7,7 0 0 1 -7,7a7,7 0 0 1 -7,-7v-22a7,7 0 0 1 7,-7Z" />
+
+        <!-- 锤头：胶囊形，宽 42、高 20 -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M43,30h22a10,10 0 0 1 0,20h-22a10,10 0 0 1 0,-20Z" />
+
+    </group>
+</vector>

@@ -1,0 +1,4 @@
+# LSPosed API 102 模块声明（不再使用 AndroidManifest 的 xposed* meta-data）
+minApiVersion=102
+targetApiVersion=102
+staticScope=false

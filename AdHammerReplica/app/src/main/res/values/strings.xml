@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AdHammer Replica</string>
+    <string name="xposed_description">去广告 LSP 模块（AdHammer 复刻版 / 支持规则扩展）</string>
+
+    <string-array name="xposed_scope">
+        <item>android</item>
+        <item>com.sina.weibo</item>
+        <item>com.wallstreetcn.news</item>
+        <item>com.ss.android.ugc.aweme</item>
+        <item>tv.danmaku.bili</item>
+        <item>com.tencent.mm</item>
+        <item>com.taobao.taobao</item>
+        <item>com.xunmeng.pinduoduo</item>
+        <item>com.xingin.xhs</item>
+        <item>com.sankuai.meituan</item>
+        <item>com.eg.android.AlipayGphone</item>
+        <item>com.baidu.searchbox</item>
+        <item>com.netease.cloudmusic</item>
+        <item>com.kugou.android</item>
+        <item>com.ximalaya.ting.android</item>
+    </string-array>
+</resources>

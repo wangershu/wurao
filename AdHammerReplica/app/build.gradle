@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.adhammer'
+    compileSdk 34
+    // 使用本机已安装的 build-tools，避免联网下载
+    buildToolsVersion '34.0.0'
+
+    defaultConfig {
+        applicationId "com.adhammer.replica"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0-replica"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        exclude 'META-INF/**'
+    }
+}
+
+dependencies {
+    // Xposed API：仅编译期依赖，运行时由 LSPosed 框架提供
+    compileOnly 'de.robv.android.xposed:api:82'
+
+    // 规则是 JSON，用 Gson 解析（原版同样使用 Gson）
+    implementation 'com.google.code.gson:gson:2.10.1'
+}

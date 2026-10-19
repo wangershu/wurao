@@ -1,0 +1,71 @@
+{
+  "_note_1": "复制本文件为 <目标包名>.txt，按需删减后推送到 /data/data/<目标包名>/.rules/",
+  "_note_2": "at 取值: 1关闭(会闪) 2禁用(可能崩) 3跳首页 4改写目标 9防火墙拦截(推荐) 8精准View",
+  "_note_3": "所有 _note_* 字段会被忽略，可放心保留",
+
+  "pkg": "com.example.app",
+  "home": "com.example.app.MainActivity",
+  "isOpen": true,
+  "isDef": false,
+  "adTips": "已为你跳过广告",
+
+  "mAdMap": {
+    "com.example.app.ad.SplashActivity": {
+      "at": 9,
+      "d": 0,
+      "to": "",
+      "m": "开屏广告 —— 用防火墙拦截，不闪不崩"
+    },
+    "com.example.app.ad.InterstitialActivity": {
+      "at": 1,
+      "d": 500,
+      "to": "",
+      "m": "插屏广告 —— 延迟 500ms 后按返回键关闭"
+    },
+    "com.example.app.MainActivity": {
+      "at": 8,
+      "ak": "[{\"v\":\"android.widget.FrameLayout\",\"s\":true,\"id\":\"ad_banner_container\",\"ht\":1,\"pl\":0,\"cl\":0,\"m\":\"首页横幅广告\"}]",
+      "m": "长在首页上的广告 —— 精准 View 隐藏"
+    },
+    "com.example.app.Url": {
+      "at": 3,
+      "ak": ".*\\.doubleclick\\.net",
+      "m": "DNS 拦截（正则是 find() 匹配，注意转义点号）"
+    },
+    "com.example.app.Dialog": {
+      "at": 5,
+      "ak": "[{\"at\":0,\"t\":\"领取奖励\"}]",
+      "m": "禁止含『领取奖励』的弹框"
+    }
+  },
+
+  "mViewMap": {
+    "com.example.app.MainActivity": [
+      {
+        "v": "android.widget.TextView",
+        "s": true,
+        "id": "tv_skip;skip_btn",
+        "t": "跳过;skip",
+        "ht": 1,
+        "pl": 2,
+        "p": "android.widget.FrameLayout",
+        "pId": "ad_container",
+        "pt": "",
+        "cl": 0,
+        "c": "",
+        "cId": "",
+        "ct": "",
+        "sq": "",
+        "m": "跳过按钮：先按 id/文本定位，再向上 2 层找到广告容器一起隐藏"
+      }
+    ]
+  },
+
+  "mUrlList": [
+    { "at": 1, "host": ".*ad[s]?\\..*" }
+  ],
+
+  "mHostList": [
+    { "at": 3, "host": ".*\\.doubleclick\\.net" }
+  ]
+}
