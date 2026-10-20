@@ -58,36 +58,6 @@ fun SettingsScreen(ctx: Context, onExport: () -> Unit, onImport: () -> Unit) {
                     onClick = { Navigator.go(Dest.SettingsPurify) }
                 )
                 Kit.ArrowRow(
-                    title = "自动跳过",
-                    summary = "不写规则也能点掉开屏广告 · ${UiState.skipScope.size} 个应用",
-                    icon = MiuixIcons.Refresh,
-                    onClick = { Navigator.go(Dest.SkipList) }
-                )
-                Kit.ArrowRow(
-                    title = "弹框拦截",
-                    summary = "升级 / 青少年模式 / 运营弹窗",
-                    icon = MiuixIcons.Blocklist,
-                    onClick = { Navigator.go(Dest.Popups) }
-                )
-                Kit.ArrowRow(
-                    title = "文件替换",
-                    summary = "把广告缓存换成空文件（有风险）",
-                    icon = MiuixIcons.Delete,
-                    onClick = { Navigator.go(Dest.Replace) }
-                )
-                Kit.ArrowRow(
-                    title = "沙僧代理",
-                    summary = "系统 VPN 拦广告域名，对所有应用生效",
-                    icon = MiuixIcons.Link,
-                    onClick = { Navigator.go(Dest.SengVpn) }
-                )
-                Kit.ArrowRow(
-                    title = "悟空实验室",
-                    summary = "填 Activity / id，看会命中哪些规则",
-                    icon = MiuixIcons.Tune,
-                    onClick = { Navigator.go(Dest.Lab) }
-                )
-                Kit.ArrowRow(
                     title = "订阅与规则源",
                     summary = "订阅地址、广告特征库、AI 接口",
                     icon = MiuixIcons.Link,
@@ -207,6 +177,55 @@ fun PurifySettingsScreen() {
                     onChecked = { UiState.setFlag(Cfg.TIPS, it) }
                 )
             }
+        }
+
+        // 每个子系统的细项收在这里，设置首页只留「怎么开关」
+        item { Kit.Section("子系统细项") }
+        item {
+            Kit.RowGroup {
+                Kit.ArrowRow(
+                    title = "自动跳过",
+                    summary = "不写规则也能点掉开屏广告 · ${UiState.skipScope.size} 个应用",
+                    icon = MiuixIcons.Refresh,
+                    onClick = { Navigator.go(Dest.SkipList) }
+                )
+                Kit.ArrowRow(
+                    title = "弹框拦截",
+                    summary = "升级 / 青少年模式 / 运营弹窗",
+                    icon = MiuixIcons.Blocklist,
+                    onClick = { Navigator.go(Dest.Popups) }
+                )
+                Kit.ArrowRow(
+                    title = "文件替换",
+                    summary = "把广告缓存换成空文件（有风险，默认关）",
+                    icon = MiuixIcons.Delete,
+                    onClick = { Navigator.go(Dest.Replace) }
+                )
+                Kit.ArrowRow(
+                    title = "沙僧代理",
+                    summary = "系统 VPN 拦广告域名，对所有应用生效",
+                    icon = MiuixIcons.Link,
+                    onClick = { Navigator.go(Dest.SengVpn) }
+                )
+            }
+        }
+        item { Kit.Section("规则生效范围") }
+        item {
+            Kit.RowGroup {
+                Kit.SwitchRow(
+                    title = "遵守订阅源的包级开关",
+                    summary = "关掉后被订阅整包停用的规则（精准 View 那批）也会执行",
+                    checked = UiState.packSwitch(),
+                    onChecked = { UiState.setPackSwitch(it) }
+                )
+            }
+        }
+        item {
+            Kit.Note(
+                "订阅源会给每个应用的规则包自带一个开关。rp=14 精准 View 有 117 个包、" +
+                    "其中 116 个被规则作者整包关掉了，所以默认只有 1 条生效。" +
+                    "关掉上面的开关就会忽略这个限制，只看单条规则自己的开关。"
+            )
         }
     }
 }

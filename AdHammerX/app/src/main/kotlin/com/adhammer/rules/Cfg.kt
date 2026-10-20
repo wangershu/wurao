@@ -45,6 +45,15 @@ object Cfg {
     /** 文件替换总开关（原版「替换功能关闭，可在替换规则页面开启」） */
     const val REPLACE = "cfg:replace"
 
+    /**
+     * 是否遵守订阅源自己的**包级开关**（RulePack.isEnable）。
+     *
+     * 订阅里 rp=14（精准 View）有 117 个包、其中 116 个被作者整包标成 false，
+     * 等于这一类规则默认全不生效。默认遵守（true）；
+     * 关掉后只看**单条规则**的 isEnable，被整包关掉的规则也会执行。
+     */
+    const val PACK_SWITCH = "cfg:packswitch"
+
     /** 单个应用的开关：true = 这个应用完全不拦（白名单） */
     fun appKey(pkg: String) = "cfg:app:$pkg"
 

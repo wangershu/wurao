@@ -2,6 +2,8 @@ package com.adhammer.rules
 
 import com.adhammer.rules.model.Actions
 import com.adhammer.rules.model.RuleItem
+import com.adhammer.rules.model.StepAct
+import com.adhammer.rules.model.StepCt
 import com.adhammer.rules.model.RulePack
 import com.adhammer.rules.model.RuleTypes
 import com.adhammer.rules.model.Step
@@ -28,7 +30,9 @@ object RuleGen {
         val cls: String,
         val id: String?,
         val text: String?,
-        val clickable: Boolean
+        val clickable: Boolean,
+        /** b= 后面的 left,top,right,bottom；没有就是空 */
+        val bounds: List<Int> = emptyList()
     )
 
     /** 结果：悟空规则包 + 八戒任务（两者分别落到不同的 key） */
@@ -51,6 +55,7 @@ object RuleGen {
 
     private val ID_RE = Regex("id=(\\S+)")
     private val TXT_RE = Regex("txt=\"(.*?)\"")
+    private val B_RE = Regex("b=(-?\\d+),(-?\\d+),(-?\\d+),(-?\\d+)")
 
     /** 解析快照文本 → View 节点列表 */
     fun parse(snapshot: String): List<Node> {
@@ -65,7 +70,8 @@ object RuleGen {
             val cls = body.substringBefore(' ').ifBlank { body }
             val id = ID_RE.find(body)?.groupValues?.getOrNull(1)
             val text = TXT_RE.find(body)?.groupValues?.getOrNull(1)
-            out.add(Node(indent / 2, cls, id, text, clickable))
+            val bounds = B_RE.find(body)?.groupValues?.drop(1)?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+            out.add(Node(indent / 2, cls, id, text, clickable, bounds))
         }
         return out
     }
@@ -127,19 +133,35 @@ object RuleGen {
             items.add(
                 RuleItem(
                     actionType = Actions.VIEW,
-                    ad = act,
+                    // 拿不到 Activity 名时退化成包名，Engine 会当成「所有页面生效」
+                    ad = act?.ifBlank { null } ?: target,
                     adKey = Jsonx.toJson(listOf(viewRule)),
                     isEnable = true,
                     ruleType = RuleTypes.WU_KONG_VIEW,
                     remark = why
                 )
             )
+            // ct 必须和填了什么对得上，否则执行器按错误的定位方式去找，步骤会被判成不可执行
+            val ct = when {
+                !node.text.isNullOrBlank() -> if (node.cls.isNotBlank()) StepCt.BY_CLASS else StepCt.BY_TEXT
+                node.id.isNullOrBlank() -> StepCt.BY_CLASS
+                else -> StepCt.BY_ID
+            }
             steps.add(
                 Step(
-                    at = 8,
+                    at = StepAct.CLICK,
+                    ct = ct,
                     wv = node.cls,
                     t = node.text,
                     vId = node.id,
+                    // 记下 bounds，换机型时按相对比例换算坐标（见 BaJieService.resolvePoint）
+                    leftX = node.bounds.getOrElse(0) { -1 },
+                    topY = node.bounds.getOrElse(1) { -1 },
+                    rightX = node.bounds.getOrElse(2) { -1 },
+                    bottomY = node.bounds.getOrElse(3) { -1 },
+                    pRel = node.bounds.size == 4,
+                    x = if (node.bounds.size == 4) (node.bounds[0] + node.bounds[2]) / 2 else -1,
+                    y = if (node.bounds.size == 4) (node.bounds[1] + node.bounds[3]) / 2 else -1,
                     c = 1,
                     d = 300
                 )

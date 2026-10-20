@@ -1,5 +1,6 @@
 package com.adhammer.hook
 
+import com.adhammer.rules.Engine
 import com.adhammer.rules.StatsStore
 import com.adhammer.util.HLog
 import io.github.libxposed.api.XposedInterface
@@ -22,13 +23,17 @@ object ShaSeng {
         val hosts = RuntimeCfg.hostsFor(pkg)
         if (hosts.isEmpty()) return
 
-        val blocked: (String) -> Boolean = { host ->
-            val h = host.trim().lowercase()
-            hosts.any { rule ->
-                val r = rule.trim().lowercase()
-                h == r || h.endsWith(".$r")
-            }
-        }
+        // 判定逻辑不再写在这里 —— 与「规则自检」共用 Engine.hostBlocked，
+        // 保证自检页面上显示「会拦」的域名，hook 里也一定拦
+        val index = Engine.build(
+            Engine.Ctx(
+                pkg = pkg,
+                packs = emptyList(),
+                hosts = hosts,
+                shaSeng = RuntimeCfg.shaSeng
+            )
+        )
+        val blocked: (String) -> Boolean = { host -> Engine.hostBlocked(index, host) }
 
         val loopback = runCatching { InetAddress.getByName("127.0.0.1") }.getOrNull()
 

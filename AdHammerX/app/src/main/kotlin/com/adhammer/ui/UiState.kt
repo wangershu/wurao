@@ -392,11 +392,28 @@ object UiState {
         }.onFailure { HLog.w("bind service failed: ${it.message}") }
     }
 
+    /**
+     * 把本地配置推给 hook 进程读的那份远程偏好。
+     *
+     * ⚠️ 以前这里只复制 `v is String`，结果 `cfg:*` 的**布尔开关一条都没推过去**：
+     * UI 里关掉悟空 / 暂停 / 单应用子系统开关，hook 那边读到的还是默认值 ——
+     * 开关看起来生效，实际完全没用。现在按类型全量复制。
+     */
     private fun pushLocalToRemote(dst: SharedPreferences) {
         val src = local ?: return
         val all = runCatching { src.all }.getOrNull() ?: return
         val ed = dst.edit()
-        all.forEach { (k, v) -> if (v is String) ed.putString(k, v) }
+        all.forEach { (k, v) ->
+            when (v) {
+                null -> ed.remove(k)
+                is String -> ed.putString(k, v)
+                is Boolean -> ed.putBoolean(k, v)
+                is Int -> ed.putInt(k, v)
+                is Long -> ed.putLong(k, v)
+                is Float -> ed.putFloat(k, v)
+                is Set<*> -> ed.putStringSet(k, v.filterIsInstance<String>().toSet())
+            }
+        }
         runCatching { ed.apply() }
     }
 
@@ -795,6 +812,37 @@ object UiState {
     fun setReplaceAuto(on: Boolean) {
         val prefs = local ?: return
         Cfg.put(prefs, Cfg.REPLACE_AUTO, on)
+        commit()
+    }
+
+    // ==================== 规则判定（与 hook 共用 Engine） ====================
+
+    /**
+     * 组装一个应用的判定索引。
+     *
+     * 和 hook 进程里 [com.adhammer.hook.RuntimeCfg] 喂给 Engine 的是同一份东西，
+     * 所以自检页判定「会拦」的，hook 里也一定会拦。
+     */
+    fun engineOf(pkg: String): com.adhammer.rules.Engine.Index =
+        com.adhammer.rules.Engine.build(
+            com.adhammer.rules.Engine.Ctx(
+                pkg = pkg,
+                packs = packsOf(pkg),
+                hosts = (hosts + appHostsOf(pkg)).distinct(),
+                home = homeOf(pkg).takeIf { it.isNotBlank() },
+                wuKong = wuKongOn && !subOff(pkg, Cfg.SUB_WU_KONG),
+                shaSeng = shaSengOn && !subOff(pkg, Cfg.SUB_SHA_SENG),
+                packSwitch = packSwitch()
+            )
+        )
+
+    /** 是否遵守订阅源自己的包级开关；默认遵守 */
+    fun packSwitch(): Boolean = Cfg.get(local, Cfg.PACK_SWITCH, true)
+
+    /** 关掉后被整包停用的规则（精准 View 那批）也会执行 */
+    fun setPackSwitch(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.PACK_SWITCH, on)
         commit()
     }
 

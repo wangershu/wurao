@@ -16,10 +16,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,6 +109,26 @@ fun ToolsScreen(ctx: Context, onPickApk: () -> Unit) {
                 summary = "不联网：扫组件 / 广告 SDK / 资源名 / 域名，产出候选规则",
                 icon = Icons.Default.Analytics,
                 onClick = { Navigator.go(Dest.Analyzer) }
+            )
+        }
+
+        item { Kit.Section("验证") }
+
+        item {
+            Kit.Item(
+                title = "规则自检",
+                summary = "拿真实规则跑一遍判定：三个子系统到底能不能干活",
+                icon = Icons.Default.CheckCircle,
+                onClick = { Navigator.go(Dest.SelfTest) }
+            )
+        }
+
+        item {
+            Kit.Item(
+                title = "悟空实验室",
+                summary = "填 Activity / id / 域名，看会命中哪些规则",
+                icon = Icons.Default.Tune,
+                onClick = { Navigator.go(Dest.Lab) }
             )
         }
 

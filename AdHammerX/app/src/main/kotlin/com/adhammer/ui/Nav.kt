@@ -58,7 +58,8 @@ sealed interface Dest {
     data object Popups : Dest        // 弹框拦截（取消弹框列表 / 升级 / 青少年模式）
     data object Replace : Dest       // 悟空文件替换（一键替换 / 批量替换）
     data object SengVpn : Dest       // 沙僧代理
-    data object Lab : Dest           // 悟空实验室（规则自检）
+    data object Lab : Dest           // 悟空实验室（规则探查）
+    data object SelfTest : Dest      // 规则自检：不开框架也能验三个子系统
 
     // ---- 设置 ----
     data object Settings : Dest

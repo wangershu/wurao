@@ -13,6 +13,7 @@ import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import com.adhammer.rules.Engine
 import com.adhammer.rules.StatsStore
 import com.adhammer.rules.model.Actions
 import com.adhammer.rules.model.RuleItem
@@ -64,9 +65,16 @@ object WuKong {
         val rules = RuntimeCfg.rulesOf(pkg, RuleTypes.WU_KONG_RULE)
         if (rules.isEmpty()) return
 
-        // 按 Activity 名建索引，hook 路径上不做遍历
-        val actMap = HashMap<String, RuleItem>()
-        rules.forEach { r -> r.ad?.let { actMap[it] = r } }
+        // 判定走 Engine（与自检同一份逻辑），这里只负责装 hook
+        val index = Engine.build(
+            Engine.Ctx(
+                pkg = pkg,
+                packs = RuntimeCfg.packsOf(pkg),
+                home = HomeConfig.get(pkg),
+                wuKong = RuntimeCfg.wuKong,
+                packSwitch = RuntimeCfg.packSwitch
+            )
+        )
         val dialogRules = rules.filter { it.isDialogKey }
 
         // ① onCreate：广告页已经打开
@@ -79,14 +87,14 @@ object WuKong {
                 val act = chain.getThisObject() as? Activity ?: return@runCatching
                 curAct = WeakReference(act)
                 curActName = act.javaClass.name
-                val rule = actMap[curActName] ?: return@runCatching
-                if (!rule.isEnable) return@runCatching
+                val rule = Engine.activityRule(index, curActName) ?: return@runCatching
                 HLog.d("hit ad activity: $curActName at=${rule.actionType}")
                 HitLog.hit(pkg, curActName.substringAfterLast('.'), Actions.describe(rule.actionType), StatsStore.KIND_PAGE)
                 handleActivity(act, rule, pkg)
                 // 真的跳过了才提示；改跳转目标/自定义 Hook 这类不弹，避免误报
                 if (rule.actionType == Actions.CLOSE_ACT ||
                     rule.actionType == Actions.SKIP_TO_HOME ||
+                    rule.actionType == Actions.SWAP_HOME ||
                     rule.actionType == Actions.DISABLE_ACT
                 ) {
                     SkipTips.show(act, RuntimeCfg.prefs())
@@ -105,7 +113,7 @@ object WuKong {
             val cn = intent?.component
             // 带 data 的外部唤起不拦，避免破坏正常分享/跳转
             if (cn != null && intent?.data == null) {
-                when (actMap[cn.className]?.actionType) {
+                when (Engine.activityRule(index, cn.className)?.actionType) {
                     Actions.BLOCK_INTENT -> {
                         HLog.d("block start: ${cn.className}")
                         intent?.setComponent(null)
@@ -113,7 +121,7 @@ object WuKong {
                         runCatching { intent?.extras?.clear() }
                         blocked = true   // 不 proceed，启动胎死腹中
                     }
-                    Actions.SKIP_TO_HOME, Actions.RETARGET -> {
+                    Actions.SKIP_TO_HOME, Actions.SWAP_HOME, Actions.RETARGET -> {
                         homeComponent(pkg, cn.className)?.let { home ->
                             HLog.d("retarget ${cn.className} -> ${home.className}")
                             intent?.setComponent(home)
@@ -149,12 +157,14 @@ object WuKong {
                 else finishNow(act)
             }
             Actions.DISABLE_ACT -> disableComponent(act, act.javaClass.name)
-            Actions.SKIP_TO_HOME -> {
+            // at=3 跳过到首页 / at=7 移花接木：行为一致，都是把落点换成首页
+            Actions.SKIP_TO_HOME, Actions.SWAP_HOME, Actions.RETARGET -> {
                 val home = homeComponent(pkg, rule.ad)
                 if (home != null) jumpHome(act, home)
                 else finishNow(act)   // 没配首页时降级为关闭，保证规则仍然有效
             }
             Actions.BLOCK_INTENT -> finishNow(act)
+            Actions.CUSTOM_HOOK -> HLog.d("custom hook not enabled: $curActName")
             else -> HLog.d("unhandled action ${rule.actionType} on $curActName")
         }
     }
@@ -277,16 +287,14 @@ object WuKong {
     // ==================== 2. View 级（精准匹配隐藏） ====================
 
     fun installViews(base: XposedInterface, pkg: String, cl: ClassLoader) {
-        val packs = RuntimeCfg.packsOf(pkg).filter { it.ruleType == RuleTypes.WU_KONG_VIEW && it.isEnable }
-        // Activity 名 → ViewRule 列表
-        val viewMap = LinkedHashMap<String, List<com.adhammer.rules.model.ViewRule>>()
-        packs.forEach { pack ->
-            pack.rules.filter { it.isEnable }.forEach { item ->
-                val list = runCatching {
-                    com.adhammer.rules.Jsonx.fromJsonArray<com.adhammer.rules.model.ViewRule>(item.adKey)
-                }.getOrNull() ?: return@forEach
-                if (list.isNotEmpty()) viewMap[item.ad ?: return@forEach] = list
-            }
+        // Activity 名 → ViewRule 列表（解析与建索引统一在 Engine 里）
+        val viewMap = Engine.build(
+            Engine.Ctx(pkg = pkg, packs = RuntimeCfg.packsOf(pkg), wuKong = RuntimeCfg.wuKong, packSwitch = RuntimeCfg.packSwitch)
+        ).let { index ->
+            // `*` 的通用规则单独塞进去，ViewEngine 按 Activity 名查表
+            val map = LinkedHashMap<String, List<com.adhammer.rules.model.ViewRule>>(index.viewMap)
+            if (index.viewAny.isNotEmpty()) map["*"] = index.viewAny
+            map
         }
         if (viewMap.isEmpty()) return
 
@@ -352,20 +360,13 @@ object WuKong {
     // ==================== 3. URL 级 ====================
 
     fun installUrl(base: XposedInterface, pkg: String, cl: ClassLoader) {
-        val urlRules = RuntimeCfg.rulesOf(pkg, RuleTypes.WU_KONG_URL).filter { it.isUrlKey }
-        if (urlRules.isEmpty()) return
+        val index = Engine.build(
+            Engine.Ctx(pkg = pkg, packs = RuntimeCfg.packsOf(pkg), wuKong = RuntimeCfg.wuKong, packSwitch = RuntimeCfg.packSwitch)
+        )
+        if (index.urlPatterns.isEmpty()) return
 
-        // 预编译正则，避免每次请求都编译
-        val patterns = urlRules.mapNotNull { r ->
-            r.adKey?.takeIf { it.isNotBlank() }?.let { key ->
-                runCatching { Regex(key) }.getOrNull()?.let { it to r }
-            }
-        }
-        if (patterns.isEmpty()) return
-
-        val blocked: (String) -> Boolean = { url ->
-            patterns.any { (re, _) -> re.containsMatchIn(url) }
-        }
+        // 正则在 Engine 建索引时已预编译，hook 路径上不重复编译
+        val blocked: (String) -> Boolean = { url -> Engine.urlRule(index, url) != null }
 
         base.hookIt(
             Reflect.findMethod(java.net.URL::class.java, "openConnection"),
@@ -399,6 +400,10 @@ object WuKong {
     fun installComponent(base: XposedInterface, pkg: String, cl: ClassLoader) {
         val rules = RuntimeCfg.rulesOf(pkg, RuleTypes.WU_KONG_COMPONENT)
         if (rules.isEmpty()) return
+
+        val index = Engine.build(
+            Engine.Ctx(pkg = pkg, packs = RuntimeCfg.packsOf(pkg), wuKong = RuntimeCfg.wuKong, packSwitch = RuntimeCfg.packSwitch)
+        )
 
         val app = runCatching {
             val atClass = Class.forName("android.app.ActivityThread")
@@ -441,14 +446,13 @@ object WuKong {
         }
 
         // at=9：Intent 防火墙，在启动阶段拦掉
-        val blocked = rules.filter { it.actionType == Actions.BLOCK_INTENT }.mapNotNull { it.ad }.toSet()
-        if (blocked.isEmpty()) return
+        if (index.firewall.isEmpty()) return
 
         val intentHook: (XposedInterface.Chain) -> Any? = { chain ->
             var intent: Intent? = null
             for (arg in chain.getArgs()) if (arg is Intent) { intent = arg; break }
             val cn = intent?.component
-            val hit = cn != null && cn.className in blocked && intent.data == null
+            val hit = cn != null && Engine.firewallHit(index, cn.className) && intent.data == null
             if (hit) {
                 HLog.d("firewall block: ${cn?.className}")
                 null

@@ -178,6 +178,10 @@ class MainActivity : ComponentActivity() {
                     Navigator.switch(Navigator.Tab.APPS)
                     Navigator.go(Dest.Lab)
                 }
+                dest == "selftest" -> {
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.SelfTest)
+                }
                 dest.startsWith("apphosts:") -> {
                     val pkg = dest.removePrefix("apphosts:")
                     Navigator.switch(Navigator.Tab.APPS)
@@ -307,6 +311,7 @@ private fun DetailLayer(
         Dest.Replace -> ReplaceScreen(ctx)
         Dest.SengVpn -> SengVpnScreen(ctx)
         Dest.Lab -> LabScreen(ctx)
+        Dest.SelfTest -> SelfTestScreen(ctx)
         Dest.Analyzer -> AnalyzerScreen(ctx, onPickApk)
         Dest.Factory -> FactoryScreen(ctx)
         Dest.Logs -> LogsScreen(ctx)

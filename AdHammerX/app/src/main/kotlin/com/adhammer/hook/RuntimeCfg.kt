@@ -37,6 +37,10 @@ object RuntimeCfg {
     @Volatile var replaceAuto: Boolean = false
         private set
 
+    /** 是否遵守订阅源的包级开关 */
+    @Volatile var packSwitch: Boolean = true
+        private set
+
     fun prefs(): SharedPreferences? = prefs
     private val cache = HashMap<String, List<RulePack>>()
     private val taskCache = HashMap<String, List<Task>>()
@@ -56,6 +60,7 @@ object RuntimeCfg {
         shaSeng = Cfg.get(p, Cfg.SHA_SENG, true)
         replace = Cfg.get(p, Cfg.REPLACE, false)
         replaceAuto = Cfg.get(p, Cfg.REPLACE_AUTO, false)
+        packSwitch = Cfg.get(p, Cfg.PACK_SWITCH, true)
         hostsCache = RuleStore.getHosts(p)
         autoSkipCache = RuleStore.getAutoSkip(p)
         HLog.d("RuntimeCfg init: hosts=${hostsCache.size} autoSkip=${autoSkipCache.size}")
@@ -67,7 +72,7 @@ object RuntimeCfg {
 
     /** 取某包某类规则的所有条目 */
     fun rulesOf(pkg: String, ruleType: Int): List<RuleItem> =
-        packsOf(pkg).filter { it.ruleType == ruleType && it.isEnable }
+        packsOf(pkg).filter { it.ruleType == ruleType && (packSwitch || it.isEnable) }
             .flatMap { it.rules }
             .filter { it.isEnable }
 

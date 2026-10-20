@@ -15,14 +15,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.adhammer.rules.model.Actions
 import com.adhammer.rules.model.RuleTypes
 import com.adhammer.rules.model.Step
+import com.adhammer.rules.model.StepAct
+import com.adhammer.rules.model.StepCt
 import com.adhammer.rules.model.Task
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Switch
@@ -371,6 +375,99 @@ fun ReplaceScreen(ctx: Context) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------- 规则自检
+
+/**
+ * 规则自检：不开 LSPosed 也能验证三个子系统的判定逻辑。
+ *
+ * 判定代码是 [com.adhammer.rules.Engine]，hook 进程用的就是它，
+ * 所以这里显示「能命中」的规则，装进目标进程也一定能命中。
+ * 真正执行还需要：模块在框架里启用 + 勾了作用域 + 重启目标应用。
+ */
+@Composable
+fun SelfTestScreen(ctx: Context) {
+    val scope = rememberCoroutineScope()
+    var cases by remember { mutableStateOf<List<com.adhammer.rules.SelfTest.Case>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    fun run() {
+        if (busy) return
+        busy = true
+        // 218 个应用全跑一遍要几秒，放 IO 线程
+        scope.launch {
+            val list = withContext(Dispatchers.IO) {
+                com.adhammer.rules.SelfTest.runAll(UiState.appIndex.map { it.first })
+            }
+            com.adhammer.rules.SelfTest.logAll(list)
+            cases = list
+            busy = false
+        }
+    }
+
+    LaunchedEffect(Unit) { if (cases == null) run() }
+
+    Kit.DetailPage(
+        title = "规则自检",
+        onBack = { Navigator.back() },
+        actions = {
+            TextButton(text = if (busy) "跑着…" else "重跑", enabled = !busy, onClick = { run() })
+        }
+    ) {
+        item { Kit.Note("用真实存储的规则跑一遍判定逻辑。判定代码和 hook 进程里是同一份，所以这里通过 = 装上就能生效。") }
+
+        val list = cases
+        if (list == null) {
+            item { Kit.Empty(text = "正在跑…") }
+        } else {
+            item {
+                Kit.Group {
+                    Text(
+                        text = com.adhammer.rules.SelfTest.summary(list),
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "真正生效还差三步：框架里启用模块 → 勾作用域 → 强制停止目标应用再打开。",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
+
+            list.groupBy { it.group }.forEach { (group, items) ->
+                item { Kit.Section(group) }
+                items(items) { c ->
+                    Kit.Item(
+                        title = "${mark(c.state)} ${c.name}",
+                        summary = c.detail
+                    )
+                }
+            }
+
+            item { Kit.Section("怎么算通过") }
+            item {
+                Kit.Group {
+                    Text(
+                        text = "通过 = 这条断言在真实规则上跑通了；\n" +
+                            "失败 = 规则本身有问题（比如 adKey 不是合法正则、步骤没有定位条件），需要修规则；\n" +
+                            "无数据 = 这类规则一条都没有，不是问题。",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun mark(s: com.adhammer.rules.SelfTest.State): String = when (s) {
+    com.adhammer.rules.SelfTest.State.PASS -> "✅"
+    com.adhammer.rules.SelfTest.State.WARN -> "⚠️"
+    com.adhammer.rules.SelfTest.State.FAIL -> "❌"
+    com.adhammer.rules.SelfTest.State.SKIP -> "—"
 }
 
 // ---------------------------------------------------------------- 沙僧代理
@@ -773,29 +870,32 @@ fun TaskEditScreen(ctx: Context, pkg: String, index: Int) {
     }
 }
 
-private fun stepLabel(s: Step): String = when {
-    s.x >= 0 && s.y >= 0 -> "坐标点击"
-    s.sx0 >= 0 && s.sy0 >= 0 -> "滑动"
-    !s.t.isNullOrBlank() -> "点文本"
-    !s.vId.isNullOrBlank() -> "点 id"
-    !s.wv.isNullOrBlank() -> "点控件"
-    else -> "未设置"
-}
+private fun stepLabel(s: Step): String = StepAct.describe(s.at)
 
 private fun stepSummary(s: Step): String = buildString {
     if (!s.t.isNullOrBlank()) append("文本：${s.t}\n")
     if (!s.vId.isNullOrBlank()) append("id：${s.vId}\n")
     if (!s.wv.isNullOrBlank()) append("控件：${s.wv}\n")
-    if (s.x >= 0 && s.y >= 0) append("坐标：${s.x},${s.y}\n")
-    if (s.sx0 >= 0) append("滑动：(${s.sx0},${s.sy0}) → (${s.sx1},${s.sy1})\n")
+    if (s.isPoint) append("坐标：${s.x},${s.y}\n")
+    if (s.isSwipe) append("滑动：${s.sd ?: "自定义"} (${s.sx0},${s.sy0}) → (${s.sx1},${s.sy1})\n")
+    if (s.isCmdStep && !s.cmd.isNullOrBlank()) append("命令：${s.cmd}\n")
+    if (!s.isExecutable()) append("⚠️ ${s.whyNot()}\n")
     if (s.d > 0) append("延迟 ${s.d}ms · ")
     append("重复 ${s.c.coerceAtLeast(1)} 次")
     if (s.prs) append(" · 长按")
 }.trim()
 
-/** 单个步骤的参数编辑 */
+/**
+ * 单个步骤的参数编辑。
+ *
+ * 关键是**动作类型 at 与定位方式 ct 必须成对写对**：
+ * 只写 at=8（点击控件）却不写 ct，执行器就不知道按文本还是按 id 找，
+ * 规则会被判成不可执行而整个跳过 —— 自己造的规则「存了没反应」多半就是这个原因。
+ * 所以这里不让用户手填 ct，而是根据填了什么自动推导（与原版规则生成逻辑一致）。
+ */
 @Composable
 private fun StepDialog(step: Step, onDismiss: () -> Unit, onConfirm: (Step) -> Unit) {
+    var at by remember { mutableStateOf(step.at.takeIf { it != 0 } ?: StepAct.CLICK) }
     var t by remember { mutableStateOf(step.t ?: "") }
     var vId by remember { mutableStateOf(step.vId ?: "") }
     var wv by remember { mutableStateOf(step.wv ?: "") }
@@ -803,11 +903,28 @@ private fun StepDialog(step: Step, onDismiss: () -> Unit, onConfirm: (Step) -> U
     var y by remember { mutableStateOf(if (step.y >= 0) step.y.toString() else "") }
     var d by remember { mutableStateOf(step.d.toString()) }
     var c by remember { mutableStateOf(step.c.toString()) }
-    var sw by remember { mutableStateOf(false) }
+    var sd by remember { mutableStateOf(step.sd ?: "top") }
+    var cmd by remember { mutableStateOf(step.cmd ?: "") }
     var sx0 by remember { mutableStateOf(if (step.sx0 >= 0) step.sx0.toString() else "") }
     var sy0 by remember { mutableStateOf(if (step.sy0 >= 0) step.sy0.toString() else "") }
     var sx1 by remember { mutableStateOf(if (step.sx1 >= 0) step.sx1.toString() else "") }
     var sy1 by remember { mutableStateOf(if (step.sy1 >= 0) step.sy1.toString() else "") }
+
+    val acts = listOf(
+        StepAct.CLICK, StepAct.LONG, StepAct.POINT,
+        StepAct.SWIPE, StepAct.BACK, StepAct.HOME, StepAct.CMD
+    )
+
+    /** 按填了什么推导 ct，保证生成的步骤一定可执行 */
+    fun deriveCt(): Int = when {
+        at == StepAct.POINT -> StepCt.BY_CLASS
+        at == StepAct.SWIPE -> StepCt.BY_CLASS
+        at == StepAct.BACK || at == StepAct.HOME || at == StepAct.CMD -> StepCt.NO_LOCATE
+        !t.isBlank() -> if (!wv.isBlank()) StepCt.BY_CLASS else StepCt.BY_TEXT
+        !vId.isBlank() -> if (!wv.isBlank()) StepCt.BY_CLASS else StepCt.BY_ID
+        !wv.isBlank() -> StepCt.BY_CLASS
+        else -> StepCt.NO_LOCATE
+    }
 
     OverlayDialog(
         show = true,
@@ -816,42 +933,118 @@ private fun StepDialog(step: Step, onDismiss: () -> Unit, onConfirm: (Step) -> U
     ) {
         Column {
             Text(
-                text = "按 文本 / id / 控件类名 定位，三者都留空时改用坐标或滑动。",
+                text = "动作类型",
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
-            TextField(value = t, onValueChange = { t = it }, label = "目标文本", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            TextField(value = vId, onValueChange = { vId = it }, label = "目标 view id", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            TextField(value = wv, onValueChange = { wv = it }, label = "控件类名", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            Row(modifier = Modifier.padding(top = 8.dp)) {
-                Switch(checked = sw, onCheckedChange = { sw = it })
-                Text(text = "用坐标 / 滑动", fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
-            }
-            if (sw) {
-                Row(modifier = Modifier.padding(top = 8.dp)) {
-                    TextField(value = x, onValueChange = { x = it }, label = "X", singleLine = true, modifier = Modifier.weight(1f))
-                    TextField(value = y, onValueChange = { y = it }, label = "Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                }
-                Row(modifier = Modifier.padding(top = 8.dp)) {
-                    TextField(value = sx0, onValueChange = { sx0 = it }, label = "起点X", singleLine = true, modifier = Modifier.weight(1f))
-                    TextField(value = sy0, onValueChange = { sy0 = it }, label = "起点Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                }
-                Row(modifier = Modifier.padding(top = 8.dp)) {
-                    TextField(value = sx1, onValueChange = { sx1 = it }, label = "终点X", singleLine = true, modifier = Modifier.weight(1f))
-                    TextField(value = sy1, onValueChange = { sy1 = it }, label = "终点Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(acts) { a ->
+                    if (a == at) {
+                        Button(onClick = { at = a }, modifier = Modifier.height(34.dp)) {
+                            Text(text = StepAct.describe(a), fontSize = 12.sp)
+                        }
+                    } else {
+                        TextButton(
+                            text = StepAct.describe(a),
+                            onClick = { at = a },
+                            modifier = Modifier.height(34.dp)
+                        )
+                    }
                 }
             }
-            Row(modifier = Modifier.padding(top = 8.dp)) {
+
+            when (at) {
+                StepAct.CLICK, StepAct.LONG -> {
+                    Text(
+                        text = "按 文本 / id / 控件类名 定位，可多选；都留空则对当前页无效。",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                    TextField(value = t, onValueChange = { t = it }, label = "目标文本", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    TextField(value = vId, onValueChange = { vId = it }, label = "目标 view id", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    TextField(value = wv, onValueChange = { wv = it }, label = "控件类名", singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+                StepAct.POINT -> {
+                    Row(modifier = Modifier.padding(top = 10.dp)) {
+                        TextField(value = x, onValueChange = { x = it }, label = "X", singleLine = true, modifier = Modifier.weight(1f))
+                        TextField(value = y, onValueChange = { y = it }, label = "Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                    }
+                    Text(
+                        text = "订阅里的坐标是别人的机型，自己抓的才准。可用悬浮窗快照抄坐标。",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                StepAct.SWIPE -> {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(listOf("top", "down", "left", "right", "swipe_custom")) { s ->
+                            val label = when (s) {
+                                "top" -> "上滑"; "down" -> "下滑"; "left" -> "左滑"
+                                "right" -> "右滑"; else -> "自定义"
+                            }
+                            if (s == sd) {
+                                Button(onClick = { sd = s }, modifier = Modifier.height(34.dp)) {
+                                    Text(text = label, fontSize = 12.sp)
+                                }
+                            } else {
+                                TextButton(text = label, onClick = { sd = s }, modifier = Modifier.height(34.dp))
+                            }
+                        }
+                    }
+                    if (sd == "swipe_custom") {
+                        Row(modifier = Modifier.padding(top = 8.dp)) {
+                            TextField(value = sx0, onValueChange = { sx0 = it }, label = "起点X", singleLine = true, modifier = Modifier.weight(1f))
+                            TextField(value = sy0, onValueChange = { sy0 = it }, label = "起点Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        }
+                        Row(modifier = Modifier.padding(top = 8.dp)) {
+                            TextField(value = sx1, onValueChange = { sx1 = it }, label = "终点X", singleLine = true, modifier = Modifier.weight(1f))
+                            TextField(value = sy1, onValueChange = { sy1 = it }, label = "终点Y", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        }
+                    }
+                }
+                StepAct.BACK -> Text(
+                    text = "模拟按返回键，用来关掉没有关闭按钮的广告页。不需要定位条件。",
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                StepAct.HOME -> Text(
+                    text = "模拟按 Home 键，直接回到桌面。不需要定位条件。",
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                StepAct.CMD -> TextField(
+                    value = cmd, onValueChange = { cmd = it },
+                    label = "shell 命令", singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                )
+            }
+
+            Row(modifier = Modifier.padding(top = 12.dp)) {
                 TextField(value = d, onValueChange = { d = it }, label = "延迟 ms", singleLine = true, modifier = Modifier.weight(1f))
                 TextField(value = c, onValueChange = { c = it }, label = "重复次数", singleLine = true, modifier = Modifier.weight(1f).padding(start = 8.dp))
             }
             Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
+                    val ct = deriveCt()
                     onConfirm(
                         step.copy(
+                            at = at,
+                            ct = ct,
                             t = t.trim().ifBlank { null },
                             vId = vId.trim().ifBlank { null },
                             wv = wv.trim().ifBlank { null },
+                            sd = if (at == StepAct.SWIPE) sd else null,
+                            cmd = if (at == StepAct.CMD) cmd.trim().ifBlank { null } else null,
                             x = x.trim().toIntOrNull() ?: -1,
                             y = y.trim().toIntOrNull() ?: -1,
                             sx0 = sx0.trim().toIntOrNull() ?: -1,
