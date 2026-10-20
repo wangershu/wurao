@@ -55,6 +55,20 @@
                 android:value="floating window for ad rule capture" />
         </service>
 
+        <!-- 沙僧代理：VpnService 域名拦截（原版「沙僧代理」） -->
+        <service
+            android:name="com.adhammer.vpn.SengVpnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="local dns filtering vpn for ad domain blocking" />
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
         <!-- 八戒：无障碍服务 -->
         <service
             android:name="com.adhammer.float.BaJieService"

@@ -90,7 +90,7 @@ object Subscriber {
 
             val ruleCount = (bundle.wuKongRules + bundle.wuKongUrls + bundle.wuKongViews +
                     bundle.wuKongComponents + bundle.wuKongReplaces)
-                .sumOf { it.rules.size }
+                .sumOf { sanitizePack(it).rules.size }
             val appCount = (bundle.wuKongRules + bundle.wuKongUrls + bundle.wuKongViews +
                     bundle.wuKongComponents + bundle.wuKongReplaces)
                 .map { it.pkg }.distinct().size
@@ -159,18 +159,49 @@ object Subscriber {
         )
     }
 
+    /**
+     * 解析 JSON 数组。
+     *
+     * 两条韧性设计（都是被订阅源教育出来的）：
+     * 1. 整包解析失败时**逐元素重试** —— 订阅源里只要有一条字段类型对不上，
+     *    以前会把整个文件丢成空列表（八戒任务 327 条全没），现在最多丢坏的那条
+     * 2. 单条失败也只记日志，不往上抛
+     */
     private inline fun <reified T> fromJsonArray(json: String?): List<T> {
         if (json.isNullOrBlank()) return emptyList()
-        return runCatching {
-            gson.fromJson<List<T>>(json, object : TypeToken<List<T>>() {}.type) ?: emptyList()
-        }.getOrElse {
-            HLog.w("parse failed: ${it.message}")
-            emptyList()
+        val type = object : TypeToken<List<T>>() {}.type
+        runCatching { gson.fromJson<List<T>>(json, type) }
+            .getOrNull()?.let { return it.filterNotNull() }
+
+        HLog.w("array parse failed, fall back to per-item: ${T::class.java.simpleName}")
+        val arr = runCatching {
+            gson.fromJson<com.google.gson.JsonArray>(
+                json, com.google.gson.JsonArray::class.java
+            )
+        }.getOrNull() ?: return emptyList()
+
+        val out = ArrayList<T>(arr.size())
+        var bad = 0
+        arr.forEach { el ->
+            runCatching { gson.fromJson<T>(el, T::class.java) }
+                .onSuccess { if (it != null) out.add(it) else bad++ }
+                .onFailure { bad++ }
         }
+        if (bad > 0) HLog.w("dropped $bad bad item(s) in ${T::class.java.simpleName}")
+        return out
     }
 
-    private fun parsePacks(json: String?): List<RulePack> = fromJsonArray(json)
-    private fun parseTasks(json: String?): List<Task> = fromJsonArray(json)
+    /**
+     * 订阅源里 `"rules"` / `"steps"` 偶尔是 null。
+     * Gson 不会执行 Kotlin 的默认值，反序列化出来就是 null，
+     * 后面任何一次 `.rules.size` 都会 NPE —— 订阅后闪退就是这么来的。
+     * 所以在解析出口统一兜底。
+     */
+    private fun parsePacks(json: String?): List<RulePack> =
+        fromJsonArray<RulePack>(json).map { sanitizePack(it) }
+
+    private fun parseTasks(json: String?): List<Task> =
+        fromJsonArray<Task>(json).map { sanitizeTask(it) }
 
     /**
      * hosts 文件解析。
@@ -223,7 +254,7 @@ object Subscriber {
         .joinToString("") { "%02x".format(it) }
 
     /** 统计某个包命中的规则条数，供 UI 展示。 */
-    fun countOf(packs: List<RulePack>): Int = packs.sumOf { it.rules.size }
+    fun countOf(packs: List<RulePack>): Int = packs.sumOf { sanitizePack(it).rules.size }
 
     /** 取某条规则的展示名。 */
     fun titleOf(item: RuleItem): String = item.ad ?: "(无)"

@@ -58,6 +58,36 @@ fun SettingsScreen(ctx: Context, onExport: () -> Unit, onImport: () -> Unit) {
                     onClick = { Navigator.go(Dest.SettingsPurify) }
                 )
                 Kit.ArrowRow(
+                    title = "自动跳过",
+                    summary = "不写规则也能点掉开屏广告 · ${UiState.skipScope.size} 个应用",
+                    icon = MiuixIcons.Refresh,
+                    onClick = { Navigator.go(Dest.SkipList) }
+                )
+                Kit.ArrowRow(
+                    title = "弹框拦截",
+                    summary = "升级 / 青少年模式 / 运营弹窗",
+                    icon = MiuixIcons.Blocklist,
+                    onClick = { Navigator.go(Dest.Popups) }
+                )
+                Kit.ArrowRow(
+                    title = "文件替换",
+                    summary = "把广告缓存换成空文件（有风险）",
+                    icon = MiuixIcons.Delete,
+                    onClick = { Navigator.go(Dest.Replace) }
+                )
+                Kit.ArrowRow(
+                    title = "沙僧代理",
+                    summary = "系统 VPN 拦广告域名，对所有应用生效",
+                    icon = MiuixIcons.Link,
+                    onClick = { Navigator.go(Dest.SengVpn) }
+                )
+                Kit.ArrowRow(
+                    title = "悟空实验室",
+                    summary = "填 Activity / id，看会命中哪些规则",
+                    icon = MiuixIcons.Tune,
+                    onClick = { Navigator.go(Dest.Lab) }
+                )
+                Kit.ArrowRow(
                     title = "订阅与规则源",
                     summary = "订阅地址、广告特征库、AI 接口",
                     icon = MiuixIcons.Link,

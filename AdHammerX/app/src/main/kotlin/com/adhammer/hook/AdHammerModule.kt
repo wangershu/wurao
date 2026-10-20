@@ -72,7 +72,10 @@ class AdHammerModule : XposedModule() {
                 add("悟空-View") { WuKong.installViews(this@AdHammerModule, pkg, cl) }
                 add("悟空-URL") { WuKong.installUrl(this@AdHammerModule, pkg, cl) }
                 add("悟空-组件") { WuKong.installComponent(this@AdHammerModule, pkg, cl) }
-                add("悟空-文件替换") { WuKong.installReplace(this@AdHammerModule, pkg) }
+                // 文件替换默认关：会真的动文件系统，要用户在「文件替换」页显式开启
+                if (RuntimeCfg.replace) {
+                    add("悟空-文件替换") { WuKong.installReplace(this@AdHammerModule, pkg) }
+                }
             }
             if (RuntimeCfg.shaSeng && !RuntimeCfg.subOff(pkg, Cfg.SUB_SHA_SENG)) {
                 add("沙僧-DNS") { ShaSeng.install(this@AdHammerModule, pkg, cl) }

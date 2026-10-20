@@ -29,6 +29,14 @@ object RuntimeCfg {
     @Volatile var shaSeng: Boolean = true
         private set
 
+    /** 文件替换总开关（默认关：替换有风险，要用户显式开） */
+    @Volatile var replace: Boolean = false
+        private set
+
+    /** 广告文件被应用写回来后自动再替换一次 */
+    @Volatile var replaceAuto: Boolean = false
+        private set
+
     fun prefs(): SharedPreferences? = prefs
     private val cache = HashMap<String, List<RulePack>>()
     private val taskCache = HashMap<String, List<Task>>()
@@ -46,6 +54,8 @@ object RuntimeCfg {
         pause = Cfg.get(p, Cfg.PAUSE, false)
         wuKong = Cfg.get(p, Cfg.WU_KONG, true)
         shaSeng = Cfg.get(p, Cfg.SHA_SENG, true)
+        replace = Cfg.get(p, Cfg.REPLACE, false)
+        replaceAuto = Cfg.get(p, Cfg.REPLACE_AUTO, false)
         hostsCache = RuleStore.getHosts(p)
         autoSkipCache = RuleStore.getAutoSkip(p)
         HLog.d("RuntimeCfg init: hosts=${hostsCache.size} autoSkip=${autoSkipCache.size}")

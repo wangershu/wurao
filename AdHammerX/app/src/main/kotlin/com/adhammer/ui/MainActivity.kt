@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -108,6 +109,13 @@ class MainActivity : ComponentActivity() {
         applyTabExtra(intent)
     }
 
+    /** adb 调试：adb shell am start ... --es dest sync */
+    private fun syncNow() {
+        val url = com.adhammer.rules.RuleStore.getMetaUrl(UiState.local)
+            ?: com.adhammer.rules.Subscriber.DEFAULT_SUB_URL
+        lifecycleScope.launch { UiState.sync(this@MainActivity, url) }
+    }
+
     private fun applyTabExtra(intent: android.content.Intent?) {
         intent?.getStringExtra("tab")?.let { name ->
             runCatching { Navigator.switch(Navigator.Tab.valueOf(name.uppercase())) }
@@ -123,6 +131,18 @@ class MainActivity : ComponentActivity() {
                 dest == "purify" -> {
                     Navigator.switch(Navigator.Tab.SETTINGS)
                     Navigator.go(Dest.SettingsPurify)
+                }
+                // 悬浮窗「快照 / 取点」抓完直接落到规则工厂
+                dest == "factory" -> {
+                    Navigator.jump(Dest.Factory, Navigator.Tab.APPS)
+                }
+                // 调试用：--es dest sync 直接跑一次订阅（省得手动点）
+                dest == "sync" -> syncNow()
+                // 调试用：--es dest shot 抓当前布局并落到规则工厂
+                dest == "shot" -> {
+                    val cap = com.adhammer.float.Snapshot.capture()
+                    com.adhammer.util.HLog.i("debug shot: ${cap?.nodes?.size ?: -1} nodes")
+                    Navigator.jump(Dest.Factory, Navigator.Tab.APPS)
                 }
                 dest.startsWith("appdetail:") -> {
                     val pkg = dest.removePrefix("appdetail:")
@@ -149,6 +169,14 @@ class MainActivity : ComponentActivity() {
                     Navigator.switch(Navigator.Tab.APPS)
                     Navigator.go(Dest.AppDetail(pkg))
                     Navigator.go(Dest.TaskList(pkg))
+                }
+                dest == "sengvpn" -> {
+                    Navigator.switch(Navigator.Tab.SETTINGS)
+                    Navigator.go(Dest.SengVpn)
+                }
+                dest == "lab" -> {
+                    Navigator.switch(Navigator.Tab.APPS)
+                    Navigator.go(Dest.Lab)
                 }
                 dest.startsWith("apphosts:") -> {
                     val pkg = dest.removePrefix("apphosts:")
@@ -272,7 +300,13 @@ private fun DetailLayer(
         is Dest.AppHosts -> AppHostsScreen(ctx, dest.pkg)
         is Dest.RuleEdit -> RuleEditScreen(ctx, dest.pkg, dest.ruleType, dest.index)
         is Dest.HomeAct -> HomeActScreen(ctx, dest.pkg)
+        is Dest.TaskEdit -> TaskEditScreen(ctx, dest.pkg, dest.index)
         Dest.Hosts -> HostsScreen(ctx)
+        Dest.SkipList -> SkipListScreen(ctx)
+        Dest.Popups -> PopupScreen(ctx)
+        Dest.Replace -> ReplaceScreen(ctx)
+        Dest.SengVpn -> SengVpnScreen(ctx)
+        Dest.Lab -> LabScreen(ctx)
         Dest.Analyzer -> AnalyzerScreen(ctx, onPickApk)
         Dest.Factory -> FactoryScreen(ctx)
         Dest.Logs -> LogsScreen(ctx)

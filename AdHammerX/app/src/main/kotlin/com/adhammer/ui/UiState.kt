@@ -68,6 +68,22 @@ object UiState {
     var appHosts by mutableStateOf<Map<String, List<String>>>(emptyMap())
         private set
 
+    /** 八戒自动跳过白名单（订阅里的 ba_jie_auto_skip.txt，3000+ 应用） */
+    var autoSkip by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** 用户自己加进「自动跳过」的应用（原版可手工添加） */
+    var mySkips by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** 用户明确排除的应用：即使订阅名单里有也不跳 */
+    var skipBlock by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** 弹框关键词：常见弹框自动关闭用的词表 */
+    var popWords by mutableStateOf<List<String>>(emptyList())
+        private set
+
     /**
      * 规则版本号。
      *
@@ -204,10 +220,26 @@ object UiState {
         }.onFailure {
             android.util.Log.w("AdHammer", "getInstalledPackages failed", it)
         }.getOrDefault(emptySet())
-        android.util.Log.i("AdHammer", "installed=${set.size}")
+        HLog.i("installed=${set.size} sample=${set.take(3).joinToString()}")
+        // 「新应用自动跳过」：这次比上次多出来的包，直接并入自己维护的跳过名单
+        if (newAppSkip()) {
+            val added = set - knownInstalled
+            if (added.isNotEmpty() && knownInstalled.isNotEmpty()) {
+                val prefs = local
+                if (prefs != null) {
+                    var n = 0
+                    added.forEach { if (Cfg.addTo(prefs, Cfg.SKIPS, it)) n++ }
+                    if (n > 0) HLog.i("new apps auto added to skip list: $n")
+                }
+            }
+        }
+        knownInstalled = set
         installed = set
         refreshIndex()
     }
+
+    /** 上一次看到的安装列表，用来算「新装了什么」 */
+    private var knownInstalled: Set<String> = emptySet()
 
     fun isInstalled(pkg: String): Boolean = pkg in installed
 
@@ -424,6 +456,11 @@ object UiState {
         hosts = RuleStore.getHosts(src)
         hostCount = hosts.size
         appHosts = hostsByPkg
+        autoSkip = RuleStore.getAutoSkip(src)
+        mySkips = Cfg.getSet(src, Cfg.SKIPS)
+        skipBlock = Cfg.getSet(src, Cfg.SKIP_BLOCK)
+        popWords = Cfg.getStr(src, Cfg.POP_WORDS, DEFAULT_POP_WORDS)
+            .split(Regex("\\s+")).filter { it.isNotBlank() }
         logs = RuleStore.getLog(src).asReversed()
         refreshStats()
         taskCount = t
@@ -631,6 +668,136 @@ object UiState {
             .onFailure { HLog.w("requestScope failed: ${it.message}") }
     }
 
+    // ==================== 八戒自动跳过 ====================
+
+    fun autoSkipOn(): Boolean = Cfg.get(local, Cfg.AUTO_SKIP, true)
+
+    fun setAutoSkip(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.AUTO_SKIP, on)
+        commit()
+    }
+
+    /** true = 所有应用都自动跳过；false = 只对订阅白名单里的应用 */
+    fun autoSkipAll(): Boolean = Cfg.get(local, Cfg.AUTO_SKIP_ALL, false)
+
+    fun setAutoSkipAll(all: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.AUTO_SKIP_ALL, all)
+        commit()
+    }
+
+    // ---------- 自动跳过：名单 ----------
+
+    /** 最终生效的自动跳过名单 = 订阅名单 ∪ 自己加的 − 明确排除的 */
+    val skipScope: Set<String> get() = (autoSkip + mySkips) - skipBlock
+
+    fun addSkip(pkg: String): Boolean {
+        val prefs = local ?: return false
+        Cfg.removeFrom(prefs, Cfg.SKIP_BLOCK, pkg)
+        val ok = Cfg.addTo(prefs, Cfg.SKIPS, pkg)
+        if (ok) commit()
+        return ok
+    }
+
+    fun removeSkip(pkg: String) {
+        val prefs = local ?: return
+        // 订阅名单里的应用没法「删除」，只能加进排除表
+        if (pkg in autoSkip) Cfg.addTo(prefs, Cfg.SKIP_BLOCK, pkg)
+        Cfg.removeFrom(prefs, Cfg.SKIPS, pkg)
+        commit()
+    }
+
+    /** 批量加入（应用页全选用） */
+    fun addSkips(pkgs: Collection<String>): Int {
+        val prefs = local ?: return 0
+        var n = 0
+        pkgs.forEach {
+            Cfg.removeFrom(prefs, Cfg.SKIP_BLOCK, it)
+            if (Cfg.addTo(prefs, Cfg.SKIPS, it)) n++
+        }
+        if (n > 0) commit()
+        return n
+    }
+
+    // ---------- 新应用自动跳过 ----------
+
+    fun newAppSkip(): Boolean = Cfg.get(local, Cfg.NEW_APP_SKIP, false)
+
+    fun setNewAppSkip(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.NEW_APP_SKIP, on)
+        commit()
+    }
+
+    // ---------- 弹框拦截 ----------
+
+    fun popupOn(): Boolean = Cfg.get(local, Cfg.POPUP, true)
+
+    fun setPopup(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.POPUP, on)
+        commit()
+    }
+
+    fun popupUpgrade(): Boolean = Cfg.get(local, Cfg.POPUP_UPGRADE, true)
+
+    fun setPopupUpgrade(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.POPUP_UPGRADE, on)
+        commit()
+    }
+
+    fun popupTeen(): Boolean = Cfg.get(local, Cfg.POPUP_TEEN, false)
+
+    fun setPopupTeen(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.POPUP_TEEN, on)
+        commit()
+    }
+
+    fun setPopWords(text: String) {
+        val prefs = local ?: return
+        Cfg.putStr(prefs, Cfg.POP_WORDS, text)
+        commit()
+    }
+
+    // ---------- 沙僧代理 ----------
+
+    fun vpnOn(): Boolean = Cfg.get(local, Cfg.VPN, false)
+
+    fun setVpn(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.VPN, on)
+        commit()
+    }
+
+    fun vpnExclude(): Set<String> = Cfg.getSet(local, Cfg.VPN_EXCLUDE)
+
+    fun setVpnExclude(set: Set<String>) {
+        val prefs = local ?: return
+        Cfg.putSet(prefs, Cfg.VPN_EXCLUDE, set)
+        commit()
+    }
+
+    // ---------- 文件替换 ----------
+
+    fun replaceOn(): Boolean = Cfg.get(local, Cfg.REPLACE, false)
+
+    fun setReplace(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.REPLACE, on)
+        commit()
+    }
+
+    fun replaceAuto(): Boolean = Cfg.get(local, Cfg.REPLACE_AUTO, false)
+
+    fun setReplaceAuto(on: Boolean) {
+        val prefs = local ?: return
+        Cfg.put(prefs, Cfg.REPLACE_AUTO, on)
+        commit()
+    }
+
     // ==================== 按应用的子系统开关 ====================
 
     /** 这个应用是否单独关掉了某个子系统（悟空 / 八戒 / 沙僧） */
@@ -650,6 +817,33 @@ object UiState {
     }
 
     const val LOCAL_PACK = "本地编辑"
+
+    /** 弹框关键词默认值：弹框上「要点的那个按钮」的文案 */
+    const val DEFAULT_POP_WORDS =
+        "稍后再说 以后再说 暂不升级 暂不更新 下次再说 我知道了 不再提醒 残忍拒绝 任性拒绝"
+
+    /** 「应用升级」弹框要点的按钮 */
+    const val UPGRADE_WORDS = "稍后再说 以后再说 暂不升级 暂不更新 下次再说 取消 以后 暂不"
+
+    /** 「青少年模式」弹框要点的按钮 */
+    const val TEEN_WORDS = "我知道了 稍后再说 以后再说 暂不开启 取消"
+
+    // ==================== 文件替换 ====================
+
+    /**
+     * 全部 rp=20（文件替换）的规则。
+     *
+     * index 是该包内「文件替换」这一类的扁平序号，
+     * 可以直接喂给 [toggleRule] / [deleteRule] / [saveRule]。
+     */
+    fun replaceRules(): List<ReplaceEntry> =
+        appIndex.map { it.first }.flatMap { pkg ->
+            val list = rulesOf(pkg, RuleTypes.WU_KONG_REPLACE)
+            if (list.isEmpty()) emptyList()
+            else list.mapIndexed { i, item -> ReplaceEntry(pkg, i, item) }
+        }
+
+    data class ReplaceEntry(val pkg: String, val index: Int, val item: RuleItem)
 
     /** 规则类型展示名 */
     fun typeName(ruleType: Int): String = when (ruleType) {

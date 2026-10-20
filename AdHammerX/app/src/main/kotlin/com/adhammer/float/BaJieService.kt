@@ -30,6 +30,9 @@ class BaJieService : AccessibilityService() {
         HLog.i("BaJieService connected")
     }
 
+    /** 自动跳过的冷却表：pkg|文案 -> 上次点的时间，避免对同一个按钮连点 */
+    private val skipCool = HashMap<String, Long>()
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         when (event.eventType) {
@@ -37,17 +40,72 @@ class BaJieService : AccessibilityService() {
                 val pkg = event.packageName?.toString()
                 val act = event.className?.toString()
                 Snapshot.setPage(pkg, act)
-                // 页面切换时尝试匹配任务
                 val p = pkg ?: return
                 if (!com.adhammer.ui.UiState.baJieOn) return
                 // 应用级细分开关：这个应用单独关掉了八戒
                 if (com.adhammer.ui.UiState.subOff(p, com.adhammer.rules.Cfg.SUB_BA_JIE)) return
-                val tasks = com.adhammer.ui.UiState.tasksOf(p)
-                if (tasks.isEmpty()) return
-                val a = act ?: return
-                tasks.filter { it.isEnable && (it.act == null || it.act == a) }
-                    .forEach { run(it) }
+
+                // ① 显式任务（订阅里的 ba_jie_tasks）
+                act?.let { a ->
+                    com.adhammer.ui.UiState.tasksOf(p)
+                        .filter { it.isEnable && (it.act == null || it.act == a) }
+                        .forEach { run(it) }
+                }
+
+                // ② 自动跳过（不写规则也能点掉开屏广告）
+                if (AutoSkip.inScope(p)) scheduleAutoSkip(p)
+
+                // ③ 常见弹框自动关闭（升级 / 青少年模式 / 运营弹窗）
+                schedulePopClose(p)
             }
+        }
+    }
+
+    /**
+     * 弹框比开屏广告出现得晚，而且常常是渐显动画，
+     * 所以铺得更长一点：1.2s ~ 6s 之间试 4 次。
+     */
+    private fun schedulePopClose(pkg: String) {
+        longArrayOf(1200, 2400, 4000, 6000).forEach { delay ->
+            handler.postDelayed({
+                if (Snapshot.pkg() != pkg) return@postDelayed
+                val root = runCatching { rootInActiveWindow }.getOrNull() ?: return@postDelayed
+                val hit = PopGuard.find(root, pkg) ?: return@postDelayed
+                if (PopGuard.perform(hit)) {
+                    com.adhammer.hook.HitLog.hit(
+                        pkg, hit.first, "关闭弹框",
+                        com.adhammer.rules.StatsStore.KIND_SKIP
+                    )
+                }
+            }, delay)
+        }
+    }
+
+    /**
+     * 页面刚出现时连着试几次。
+     *
+     * 开屏广告的跳过按钮往往是倒计时结束才出现 / 才会变成可点，
+     * 只扫一次基本扫不到，所以铺一组延时重试，6 秒内还没出现就放弃。
+     */
+    private fun scheduleAutoSkip(pkg: String) {
+        longArrayOf(400, 900, 1600, 2600, 3800, 5200).forEach { delay ->
+            handler.postDelayed({
+                // 页面已经切走就不点了
+                if (Snapshot.pkg() != pkg) return@postDelayed
+                val root = runCatching { rootInActiveWindow }.getOrNull() ?: return@postDelayed
+                val hit = AutoSkip.find(root) ?: return@postDelayed
+                val key = "$pkg|${hit.text}"
+                val now = android.os.SystemClock.uptimeMillis()
+                if (now - (skipCool[key] ?: 0L) < 8000L) return@postDelayed
+                val clicked = AutoSkip.perform(hit)
+                if (clicked != null) {
+                    skipCool[key] = now
+                    com.adhammer.hook.HitLog.hit(
+                        pkg, clicked, "自动跳过",
+                        com.adhammer.rules.StatsStore.KIND_SKIP
+                    )
+                }
+            }, delay)
         }
     }
 

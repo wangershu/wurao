@@ -223,21 +223,41 @@ object RuleStore {
     fun getRules(prefs: SharedPreferences?, pkg: String): List<RulePack> {
         val json = runCatching { prefs?.getString(PREFIX_RULES + pkg, null) }.getOrNull()
             ?: return emptyList()
-        return runCatching {
+        val raw = runCatching {
             gson.fromJson<List<RulePack>>(json, object : TypeToken<List<RulePack>>() {}.type)
         }.getOrElse {
             HLog.w("parse rules failed for $pkg: ${it.message}")
-            emptyList()
-        }
+            null
+        } ?: return emptyList()
+        return raw.map { it.sanitized() }
     }
 
     fun getTasks(prefs: SharedPreferences?, pkg: String): List<Task> {
         val json = runCatching { prefs?.getString(PREFIX_TASKS + pkg, null) }.getOrNull()
             ?: return emptyList()
-        return runCatching {
+        val raw = runCatching {
             gson.fromJson<List<Task>>(json, object : TypeToken<List<Task>>() {}.type)
-        }.getOrElse { emptyList() }
+        }.getOrElse {
+            HLog.w("parse tasks failed for $pkg: ${it.message}")
+            null
+        } ?: return emptyList()
+        return raw.map { it.sanitized() }
     }
+
+    // ---------------------------------------------------------------- 空值兜底
+    //
+    // Gson 用 Unsafe 直接分配对象，不会执行 Kotlin 构造器里的默认值。
+    // 订阅源里只要出现一次 `"rules": null`，反序列化出来的 RulePack.rules 就是 null ——
+    // 而它在 Kotlin 里声明成非空 List，于是外面 `pack.rules.size` 直接 NPE。
+    // 订阅后闪退（miuix Card 里 List.size() on null object）就是这么来的。
+    // 这里在「读」这一侧统一兜底，比在每个调用点判空可靠。
+
+    /** 参数声明成可空，才能在不触发编译告警的前提下判断运行时是否为 null */
+    private fun <T> nn(v: List<T>?): List<T> = if (v == null) emptyList() else v
+
+    fun RulePack.sanitized(): RulePack = sanitizePack(this)
+
+    fun Task.sanitized(): Task = sanitizeTask(this)
 
     fun getHosts(prefs: SharedPreferences?): List<String> {
         val json = runCatching { prefs?.getString(KEY_HOSTS, null) }.getOrNull() ?: return emptyList()
@@ -265,4 +285,26 @@ object RuleStore {
     // ---------- 便捷：Gson 扩展 ----------
 
     private fun Gson.toArrayList(set: Set<String>): String = toJson(set)
+}
+
+// ============================================================================
+// 空值兜底（放在顶层，订阅解析和读取两条路都能直接用）
+//
+// Gson 用 Unsafe 分配对象，不会执行 Kotlin 构造器里的默认值。
+// 订阅源里只要出现一次 `"rules": null`，反序列化出来的 RulePack.rules 就是 null ——
+// 而它在 Kotlin 里声明成非空 List，于是外面 `pack.rules.size` 直接 NPE。
+// 「规则订阅后闪退（List.size() on a null object）」就是这么来的。
+// ============================================================================
+
+/** 参数声明成可空，才能在不触发编译告警的前提下判断运行时是否为 null */
+private fun <T> nn(v: List<T>?): List<T> = if (v == null) emptyList() else v
+
+fun sanitizePack(p: RulePack): RulePack {
+    val safe = nn(p.rules)
+    return if (safe === p.rules) p else p.copy(rules = safe)
+}
+
+fun sanitizeTask(t: Task): Task {
+    val safe = nn(t.steps)
+    return if (safe === t.steps) t else t.copy(steps = safe)
 }

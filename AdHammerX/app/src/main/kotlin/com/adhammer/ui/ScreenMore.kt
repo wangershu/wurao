@@ -48,8 +48,13 @@ import com.adhammer.float.Snapshot
 import com.adhammer.rules.Cfg
 import com.adhammer.rules.Jsonx
 import com.adhammer.rules.RuleGen
+import com.adhammer.rules.model.Actions
+import com.adhammer.rules.model.RuleItem
 import com.adhammer.rules.model.RulePack
+import com.adhammer.rules.model.RuleTypes
+import com.adhammer.rules.model.Step
 import com.adhammer.rules.model.Task
+import com.adhammer.rules.model.ViewRule
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
@@ -61,24 +66,99 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 规则工厂：布局快照 → 规则。
- * 本地启发式不联网；AI 是可选增强（同一份快照，schema 完全一致）。
+ *
+ * 对应原版「悬浮窗 → 快照 → 查看布局 → 勾选节点 → 生成规则」。
+ * 悬浮窗点「快照」后会直接跳到这里，并把节点结构化地带过来，可以逐条勾选；
+ * 如果只想让它自己猜，也有「一键猜广告控件」和 AI 生成两条兜底路径。
  */
 @Composable
 fun FactoryScreen(ctx: Context) {
     val scope = rememberCoroutineScope()
 
-    var pkg by remember { mutableStateOf(RuleGen.pageOf(UiState.pendingSnapshot).second ?: "") }
-    var snapshot by remember { mutableStateOf(UiState.pendingSnapshot.ifBlank { Snapshot.last() }) }
+    // 悬浮窗抓完的快照（同进程单例，比走 Intent 传文本更完整）
+    val cap = Snapshot.pending
+    val pickedPoint = Snapshot.picked
+
+    var pkg by remember(cap) { mutableStateOf(cap?.pkg.orEmpty()) }
+    var act by remember(cap) { mutableStateOf(cap?.act.orEmpty()) }
+    var chosen by remember(cap) { mutableStateOf<Set<Int>>(emptySet()) }
+    var withTask by remember { mutableStateOf(true) }
     var packs by remember { mutableStateOf<List<RulePack>>(emptyList()) }
     var tasks by remember { mutableStateOf<List<Task>>(emptyList()) }
     var preview by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var showRaw by remember { mutableStateOf(false) }
+
+    val nodes = cap?.nodes ?: emptyList()
+
+    // 候选：优先可点击的，没有就退到「有文本的」
+    val candidates = remember(nodes) {
+        val clickable = nodes.withIndex().filter { (_, n) -> n.clickable }
+        (if (clickable.isNotEmpty()) clickable
+        else nodes.withIndex().filter { (_, n) -> !n.text.isNullOrBlank() })
+            .take(120)
+    }
+
+    fun build() {
+        if (pkg.isBlank()) {
+            msg = "先填目标包名"
+            return
+        }
+        val sel = chosen.sorted().mapNotNull { nodes.getOrNull(it) }
+        if (sel.isEmpty()) {
+            msg = "先勾选至少一个控件（列表里点一下就是选中）"
+            return
+        }
+        val items = sel.map { n ->
+            RuleItem(
+                actionType = Actions.VIEW,
+                ad = act.takeIf { it.isNotBlank() },
+                adKey = Jsonx.toJson(
+                    listOf(
+                        ViewRule(
+                            v = n.cls,
+                            s = true,
+                            id = n.id,
+                            t = n.text,
+                            ht = 1,
+                            pl = 1,
+                            m = "快照生成"
+                        )
+                    )
+                ),
+                isEnable = true,
+                remark = "快照生成：" + n.label.take(20)
+            )
+        }
+        packs = listOf(
+            RulePack(
+                isEnable = true,
+                name = "悬浮窗生成",
+                pkg = pkg,
+                ruleType = RuleTypes.WU_KONG_VIEW,
+                rules = items
+            )
+        )
+        tasks = if (!withTask) emptyList() else listOf(
+            Task(
+                act = act.takeIf { it.isNotBlank() },
+                isEnable = true,
+                name = "悬浮窗生成-点击",
+                pkg = pkg,
+                ruleType = RuleTypes.BA_JIE_TASK,
+                steps = sel.map { n -> Step(at = 8, vId = n.id, t = n.text, wv = n.cls, c = 1, d = 300) }
+            )
+        )
+        preview = Jsonx.toJson(packs).orEmpty()
+        msg = "生成 ${items.size} 条 View 规则" +
+            if (withTask) " + ${sel.size} 步点击任务" else ""
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Kit.Bar(
             title = "规则工厂",
-            subtitle = "快照 → 规则",
+            subtitle = if (cap == null) "还没有快照" else cap.actShort,
             canBack = true,
             onBack = { Navigator.back() }
         )
@@ -88,7 +168,20 @@ fun FactoryScreen(ctx: Context) {
             contentPadding = Kit.pad(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            item { Kit.Section("目标") }
+            if (cap == null) {
+                item { Kit.Note("开悬浮窗 → 停在广告页 → 点「快照」，会自动回到这里。") }
+                item {
+                    Kit.Empty(
+                        text = "还没有快照。规则工厂的原料是目标页面当前的控件树。",
+                        actionText = "打开悬浮窗",
+                        onAction = { com.adhammer.float.FloatController.toggle(ctx, true) }
+                    )
+                }
+                return@LazyColumn
+            }
+
+            // ---------- 目标 ----------
+            item { Kit.Section("目标", "${nodes.size} 个节点") }
             item {
                 Kit.Group {
                     TextField(
@@ -97,81 +190,37 @@ fun FactoryScreen(ctx: Context) {
                         label = "目标包名",
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Row(modifier = Modifier.padding(top = 12.dp)) {
-                        TextButton(text = "读取最新快照", onClick = {
-                            val s = UiState.pendingSnapshot.ifBlank { Snapshot.last() }
-                            if (s.isBlank()) {
-                                msg = "还没有快照：开悬浮窗 → 停在广告页 → 点「快照」"
-                            } else {
-                                snapshot = s
-                                val p = RuleGen.pageOf(s)
-                                if (pkg.isBlank()) pkg = p.second ?: ""
-                                msg = "已载入：${p.first ?: "未知页面"}"
-                            }
-                        })
-                    }
-                }
-            }
-
-            item { Kit.Section("布局快照", "${snapshot.lineCount()} 行") }
-            item {
-                Kit.Group {
-                    if (snapshot.isBlank()) {
-                        Text(
-                            text = "还没有快照。开悬浮窗 → 停在广告页 → 点「快照」→ 回到这里生成。",
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                        )
-                    } else {
-                        Text(
-                            text = snapshot,
-                            fontSize = 11.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.height(160.dp).verticalScroll(rememberScrollState())
-                        )
-                    }
-                }
-            }
-
-            item { Kit.Section("生成") }
-            item {
-                Kit.Group {
-                    Text(
-                        text = "本地生成按「跳过/关闭/广告/skip/close」等文案定位；AI 生成需要填 Key。",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    TextField(
+                        value = act,
+                        onValueChange = { act = it },
+                        label = "Activity（留空 = 所有页面）",
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     )
-                    Row(modifier = Modifier.padding(top = 12.dp)) {
-                        TextButton(text = "本地生成", onClick = {
-                            if (snapshot.isBlank()) {
-                                msg = "请先载入快照"
-                                return@TextButton
+                    Row(modifier = Modifier.padding(top = 10.dp)) {
+                        TextButton(text = "一键猜广告控件", onClick = {
+                            val snapText = cap.text
+                            val r = RuleGen.heuristic(pkg, snapText)
+                            if (r.packs.isEmpty()) {
+                                msg = "没猜出广告特征，手动勾选更稳"
+                            } else {
+                                packs = r.packs
+                                tasks = r.tasks
+                                preview = Jsonx.toJson(r.packs).orEmpty()
+                                msg = "猜出 ${r.packs.sumOf { it.rules.size }} 条规则 + ${r.tasks.sumOf { it.steps.size }} 步任务"
                             }
-                            val p = RuleGen.pageOf(snapshot)
-                            if (pkg.isBlank()) pkg = p.second ?: ""
-                            val r = RuleGen.heuristic(pkg, snapshot)
-                            packs = r.packs
-                            tasks = r.tasks
-                            preview = Jsonx.toJson(r.packs) ?: ""
-                            msg = if (r.packs.isEmpty()) "没找到广告特征，试试 AI 生成或手工写"
-                            else "生成 ${r.packs.sumOf { it.rules.size }} 条规则 + ${r.tasks.sumOf { it.steps.size }} 步任务"
                         })
                         TextButton(
-                            text = if (busy) "AI 生成中…" else "AI 生成",
+                            text = if (busy) "AI 中…" else "AI 生成",
                             enabled = !busy,
                             onClick = {
-                                if (snapshot.isBlank() || pkg.isBlank()) {
-                                    msg = "快照和包名都要有"
-                                    return@TextButton
-                                }
                                 if (!AiConfig.isReady(ctx)) {
-                                    msg = "还没填 AI 接口信息（设置页）"
+                                    msg = "还没填 AI 接口（设置 → 高级）"
                                     return@TextButton
                                 }
                                 busy = true
                                 msg = "AI 生成中…"
                                 scope.launch {
-                                    val json = AiRuleGen.generate(ctx, pkg, snapshot)
+                                    val json = AiRuleGen.generate(ctx, pkg, cap.text)
                                     val pack = RuleGen.fromAiJson(json)
                                     busy = false
                                     if (pack == null) {
@@ -179,12 +228,118 @@ fun FactoryScreen(ctx: Context) {
                                     } else {
                                         packs = listOf(pack)
                                         tasks = emptyList()
-                                        preview = json ?: ""
+                                        preview = json.orEmpty()
                                         msg = "AI 生成 ${pack.rules.size} 条规则"
                                     }
                                 }
                             },
                             modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            // ---------- 坐标 ----------
+            if (pickedPoint != null && pickedPoint.size == 2) {
+                item { Kit.Section("取的坐标") }
+                item {
+                    Kit.ArrowRow(
+                        title = "(${pickedPoint[0]}, ${pickedPoint[1]})",
+                        summary = "点一下加进八戒步骤（没有稳定 id / 文本时用坐标）",
+                        icon = Icons.Filled.TouchApp,
+                        onClick = {
+                            val step = Step(at = 8, x = pickedPoint[0], y = pickedPoint[1], d = 200)
+                            tasks = if (tasks.isEmpty()) {
+                                listOf(
+                                    Task(
+                                        act = act.takeIf { it.isNotBlank() },
+                                        isEnable = true,
+                                        name = "悬浮窗生成-坐标",
+                                        pkg = pkg,
+                                        ruleType = RuleTypes.BA_JIE_TASK,
+                                        steps = listOf(step)
+                                    )
+                                )
+                            } else {
+                                tasks.mapIndexed { i, t ->
+                                    if (i == 0) t.copy(steps = t.steps + step) else t
+                                }
+                            }
+                            Snapshot.clearPick()
+                            msg = "已加一步坐标点击（八戒任务）"
+                        }
+                    )
+                }
+            }
+
+            // ---------- 候选控件 ----------
+            item {
+                Kit.Section(
+                    text = "选择控件",
+                    extra = if (chosen.isEmpty()) "点一行选中" else "已选 ${chosen.size} 个"
+                )
+            }
+            if (candidates.isEmpty()) {
+                item { Kit.Note("这一页没有可点击控件，换个页面再抓。") }
+            } else {
+                item {
+                    Kit.RowGroup {
+                        candidates.take(60).forEach { (i, n) ->
+                            val on = i in chosen
+                            Kit.PlainRow(
+                                title = n.label.take(24),
+                                summary = buildString {
+                                    append(n.short)
+                                    n.id?.let { append(" · #").append(it) }
+                                    if (n.bounds.size == 4) {
+                                        append(" · ")
+                                        append(n.bounds[2] - n.bounds[0]).append("×")
+                                        append(n.bounds[3] - n.bounds[1])
+                                    }
+                                },
+                                start = {
+                                    androidx.compose.material3.Checkbox(
+                                        checked = on,
+                                        onCheckedChange = null
+                                    )
+                                },
+                                onClick = {
+                                    chosen = if (on) chosen - i else chosen + i
+                                }
+                            )
+                        }
+                    }
+                }
+                if (candidates.size > 60) {
+                    item { Kit.Note("只列了前 60 个可点击控件，剩下的用「一键猜」或 AI。") }
+                }
+            }
+
+            // ---------- 选项 ----------
+            item { Kit.Section("生成") }
+            item {
+                Kit.RowGroup {
+                    Kit.SwitchRow(
+                        title = "同时生成八戒点击步骤",
+                        summary = "悟空 View 规则没盖住时，靠无障碍点掉",
+                        checked = withTask,
+                        onChecked = { withTask = it }
+                    )
+                    Kit.ArrowRow(
+                        title = "查看原始快照",
+                        summary = if (showRaw) "已展开 ${cap.text.lineSequence().count()} 行" else "缩进树 + 资源 id + 坐标",
+                        onClick = { showRaw = !showRaw }
+                    )
+                }
+            }
+            if (showRaw) {
+                item {
+                    Kit.Group {
+                        Text(
+                            text = cap.text,
+                            fontSize = 10.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.height(220.dp).verticalScroll(rememberScrollState())
                         )
                     }
                 }
@@ -196,7 +351,7 @@ fun FactoryScreen(ctx: Context) {
                     Kit.Group {
                         Text(
                             text = preview,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             modifier = Modifier.height(180.dp).verticalScroll(rememberScrollState())
                         )
@@ -207,24 +362,32 @@ fun FactoryScreen(ctx: Context) {
             if (msg.isNotBlank()) item { Kit.Note(msg) }
 
             item {
-                Row(modifier = Modifier.padding(horizontal = Kit.H_PAD, vertical = 8.dp)) {
+                Row(
+                    modifier = Modifier.padding(horizontal = Kit.H_PAD, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { build() },
+                        enabled = chosen.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) { Text(text = "生成规则") }
                     Button(
                         onClick = {
                             msg = UiState.saveGenerated(pkg, packs, tasks)
                             packs = emptyList()
                             tasks = emptyList()
                             preview = ""
+                            chosen = emptySet()
+                            Snapshot.clearPending()
                         },
                         enabled = packs.isNotEmpty(),
                         modifier = Modifier.weight(1f)
-                    ) { Text(text = "保存到规则库") }
+                    ) { Text(text = "保存") }
                 }
             }
         }
     }
 }
-
-private fun String.lineCount() = lineSequence().count()
 
 /**
  * 沙僧：域名黑名单编辑。

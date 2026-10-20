@@ -458,7 +458,10 @@ fun TaskListScreen(ctx: Context, pkg: String) {
     Kit.DetailPage(
         title = "八戒任务",
         subtitle = pkg,
-        onBack = { Navigator.back() }
+        onBack = { Navigator.back() },
+        actions = {
+            TextButton(text = "新建", onClick = { Navigator.go(Dest.TaskEdit(pkg, -1)) })
+        }
     ) {
         if (tasks.isEmpty()) {
             item {
@@ -544,6 +547,13 @@ fun TaskListScreen(ctx: Context, pkg: String) {
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
+                    TextButton(
+                        text = "编辑步骤",
+                        onClick = {
+                            Navigator.go(Dest.TaskEdit(pkg, viewing))
+                            viewing = -1
+                        }
+                    )
                     TextButton(text = "关闭", onClick = { viewing = -1 })
                 }
             }

@@ -300,10 +300,21 @@ data class Step(
     @SerializedName("clkChk") val clkChk: Int = 0,
     @SerializedName("rndIt") val rndIt: Int = 0,
     @SerializedName("pRel") val pRel: Boolean = false,
-    @SerializedName("searchViews") val searchViews: String? = null,
+    /**
+     * 订阅里这个字段是**对象**不是字符串（见 ba_jie_tasks.txt 的 steps[*].searchViews）。
+     * 之前按 String 解析，Gson 直接抛 IllegalStateException，
+     * 结果整个 ba_jie_tasks.txt 被丢成空列表 —— 327 条八戒任务一条都没进来。
+     * 这里用 JsonElement 接住，原样存取，换源也不会再炸。
+     */
+    @SerializedName("searchViews") val searchViews: com.google.gson.JsonElement? = null,
     @SerializedName("cmd") val cmd: String? = null,
     @SerializedName("sd") val sd: String? = null
 )
+
+/**
+ * 八戒步骤里 `searchViews` 的常见形状：一组「按什么条件找 View」的描述。
+ * 目前只做展示，真正执行步骤时用的是 vId / t / wv 三个字段。
+ */
 
 // ==================== 订阅元信息 ====================
 

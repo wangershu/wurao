@@ -468,6 +468,20 @@ object WuKong {
         val rules = RuntimeCfg.rulesOf(pkg, RuleTypes.WU_KONG_REPLACE)
         if (rules.isEmpty()) return
         mainHandler.post {
+            runReplace(rules)
+            // 「自动检测并替换」：应用会把广告文件写回来，隔一会儿再替一次
+            if (RuntimeCfg.replaceAuto) {
+                mainHandler.postDelayed(object : Runnable {
+                    override fun run() {
+                        runReplace(rules)
+                        mainHandler.postDelayed(this, 30_000L)
+                    }
+                }, 30_000L)
+            }
+        }
+    }
+
+    private fun runReplace(rules: List<com.adhammer.rules.model.RuleItem>) {
             for (r in rules) {
                 val path = r.adKey?.takeIf { it.isNotBlank() } ?: r.ad ?: continue
                 if (!isSafePath(path)) {
@@ -483,7 +497,6 @@ object WuKong {
                     }
                 }.onFailure { HLog.w("replace failed $path: ${it.message}") }
             }
-        }
     }
 
     /** 安全约束：不得动 /data、/data/data 根与外置存储根 */

@@ -22,6 +22,8 @@
 # ---------- 3. Manifest 声明的组件 ----------
 -keep class com.adhammer.ui.MainActivity { *; }
 -keep class com.adhammer.float.** { *; }
+# 沙僧代理：VpnService 由系统按全名绑定，改了名就起不来
+-keep class com.adhammer.vpn.** { *; }
 
 # ---------- 4. 反射兜底 ----------
 # Reflect.kt 只查 Android 框架的类（android.* / java.*），不涉及自身类名；

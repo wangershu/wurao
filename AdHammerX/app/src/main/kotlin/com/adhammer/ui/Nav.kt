@@ -40,6 +40,9 @@ sealed interface Dest {
     /** index = -1 表示新建 */
     data class RuleEdit(val pkg: String, val ruleType: Int, val index: Int) : Dest
     data class HomeAct(val pkg: String) : Dest
+
+    /** 八戒任务步骤编辑器：index = -1 表示新建任务 */
+    data class TaskEdit(val pkg: String, val index: Int) : Dest
     /** 沙僧域名（全局，不属于某个 App） */
     data object Hosts : Dest
     /** 造规则：APK 分析器 / 规则工厂 */
@@ -49,6 +52,13 @@ sealed interface Dest {
     // ---- 统计 ----
     data object Stats : Dest
     data object Logs : Dest
+
+    // ---- 原版独立功能页 ----
+    data object SkipList : Dest      // 自动跳过白名单（原版「添加自动跳过的应用」）
+    data object Popups : Dest        // 弹框拦截（取消弹框列表 / 升级 / 青少年模式）
+    data object Replace : Dest       // 悟空文件替换（一键替换 / 批量替换）
+    data object SengVpn : Dest       // 沙僧代理
+    data object Lab : Dest           // 悟空实验室（规则自检）
 
     // ---- 设置 ----
     data object Settings : Dest
