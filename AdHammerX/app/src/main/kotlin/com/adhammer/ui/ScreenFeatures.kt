@@ -61,6 +61,9 @@ fun SkipListScreen(ctx: Context) {
     val rev = UiState.revision
     val all = remember(rev) { UiState.skipScope.toList().sorted() }
 
+    // 应用名是异步查的（PackageManager 不能在主线程猛调），先把前 200 个的名字补齐
+    LaunchedEffect(all) { withContext(Dispatchers.IO) { UiState.ensureLabels(ctx, all.take(200)) } }
+
     Kit.DetailPage(
         title = "自动跳过",
         onBack = { Navigator.back() },
