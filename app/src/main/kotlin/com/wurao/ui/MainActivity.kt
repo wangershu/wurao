@@ -203,6 +203,35 @@ class MainActivity : ComponentActivity() {
             finish()
             return true
         }
+        // 对某个 App 跑自动分析（扫它的组件挖广告候选）—— 本地扫 APK，
+        // 不需要目标进程被 hook，所以作用域没加也能跑
+        intent?.getStringExtra("analyze")?.let { pkg ->
+            runInBackground {
+                val pm = packageManager
+                val pi = runCatching {
+                    pm.getPackageInfo(
+                        pkg,
+                        android.content.pm.PackageManager.GET_ACTIVITIES or
+                            android.content.pm.PackageManager.GET_SERVICES or
+                            android.content.pm.PackageManager.GET_RECEIVERS or
+                            android.content.pm.PackageManager.GET_PROVIDERS
+                    )
+                }.getOrNull()
+                if (pi == null) return@runInBackground "分析失败：拿不到 $pkg 的组件（装了吗？）"
+                val comps = ArrayList<Pair<String, String>>()
+                pi.activities?.forEach { comps += it.name to "activity" }
+                pi.services?.forEach { comps += it.name to "service" }
+                pi.receivers?.forEach { comps += it.name to "receiver" }
+                pi.providers?.forEach { comps += it.name to "provider" }
+                val cands = AdComponentFinder.find(comps)
+                if (cands.isEmpty()) return@runInBackground "$pkg：扫了 ${comps.size} 个组件，没挖到候选"
+                val head = cands.take(12).joinToString("\n") { c ->
+                    "  [${c.level}] ${c.name.substringAfterLast('.')} —— ${c.reason}"
+                }
+                "$pkg：组件 ${comps.size} 个，候选 ${cands.size} 条，前 ${minOf(12, cands.size)} 条：\n$head"
+            }
+            return false
+        }
         intent?.getStringExtra("gen_rule")?.let { idxStr ->
             val idx = idxStr.toIntOrNull() ?: 0
             val pick = SnapshotService.lastSnapshot?.getOrNull(idx)
