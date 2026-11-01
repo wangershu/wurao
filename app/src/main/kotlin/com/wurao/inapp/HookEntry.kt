@@ -70,6 +70,7 @@ class HookEntry : XposedModule() {
         // 读不到就维持全关/不停用 —— 安全第一。
         loadRiskConfig(pkg)
         loadStoppedRules()
+        loadUserRules()
 
         // L0 三件套（组件 / DNS / SDK）：默认全关，按 App 在界面里开。
         // 装不装得上看 RiskGate —— 没开的应用一个 hook 都不装，零开销。
@@ -84,6 +85,14 @@ class HookEntry : XposedModule() {
             .onFailure { Log.w("L0 装配失败: ${it.message}") }
 
         Log.i("已装配: $pkg")
+    }
+
+    /** 读用户自己加的规则（检视层抓的或手写的）。 */
+    private fun loadUserRules() {
+        val raw = runCatching {
+            getRemotePreferences(Cfg.GROUP)?.getString(Cfg.KEY_USER_RULES, null)
+        }.getOrNull() ?: return
+        Executor.setUserRules(Cfg.decodeRules(raw))
     }
 
     /** 读界面上停用的规则（排错时的出口）。 */

@@ -31,6 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.wurao.core.model.Act
+import com.wurao.core.model.Origin
+import com.wurao.core.model.Rule
+import com.wurao.core.model.Scope
 import com.wurao.core.Cfg
 import com.wurao.core.RiskGate
 import com.wurao.core.analyze.AdComponentFinder
@@ -47,6 +51,35 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
+
+        // 调试直达：adb shell am start ... --es add_pkg <包名> --es add_sel <选择器> [--es add_act hide]
+        // 省得每次验证都要在界面上点半天（上一版也留了这类入口）。
+        val addPkg = intent?.getStringExtra("add_pkg")
+        val addSel = intent?.getStringExtra("add_sel")
+        if (!addPkg.isNullOrBlank() && !addSel.isNullOrBlank()) {
+            val actKey = intent?.getStringExtra("add_act") ?: Act.HIDE.key
+            val act = Act.fromKey(actKey) ?: Act.HIDE
+            val r = Rule(
+                domain = com.wurao.core.model.Domain.NODE,
+                target = addSel,
+                act = act,
+                scope = if (addPkg == "*") Scope.Global else Scope.App(addPkg),
+                origin = Origin.User,
+                groupKey = Cfg.GROUP_USER,
+                ruleKey = addSel.hashCode().toString(),
+                note = addSel,
+            )
+            val old = Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))
+            if (r.validate().isEmpty()) {
+                prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(old + r)).apply()
+                android.widget.Toast.makeText(this, "已加规则：${act.key} $addPkg", 0).show()
+            } else {
+                android.widget.Toast.makeText(this, "规则不合法：${r.validate().joinToString()}", 0).show()
+            }
+            finish()
+            return
+        }
+
         setContent { WuraoApp() }
     }
 
@@ -314,18 +347,85 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsScreen() {
+        var rules by remember { mutableStateOf(Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))) }
+
+        fun save(list: List<Rule>) {
+            rules = list
+            prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(list)).apply()
+        }
+
+        var pkg by remember { mutableStateOf("") }
+        var sel by remember { mutableStateOf("") }
+        var act by remember { mutableStateOf(Act.HIDE) }
+        var tip by remember { mutableStateOf("") }
+
+        fun add() {
+            if (pkg.isBlank() || sel.isBlank()) {
+                tip = "包名和选择器都要填"
+                return
+            }
+            val r = Rule(
+                domain = com.wurao.core.model.Domain.NODE,
+                target = sel.trim(),
+                act = act,
+                scope = if (pkg.trim() == "*") Scope.Global else Scope.App(pkg.trim()),
+                origin = Origin.User,
+                groupKey = Cfg.GROUP_USER,
+                ruleKey = sel.trim().hashCode().toString(),
+                note = sel.trim(),
+            )
+            val issues = r.validate()
+            if (issues.isNotEmpty()) {
+                tip = "这条规则不合法：" + issues.joinToString("；")
+                return
+            }
+            save(rules + r)
+            sel = ""
+            tip = "已加（${rules.size + 1} 条）"
+        }
+
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("设置", fontWeight = FontWeight.Bold)
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("规则源", fontWeight = FontWeight.Bold)
-                    Text(
-                        "GKD 订阅与域名表的解析已经写好（导入即生效、反复导入不翻倍），" +
-                            "界面上的导入入口下一步接。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+            Text("我的规则", fontWeight = FontWeight.Bold)
+            Text(
+                "自己加的规则优先级最高 —— 你是亲眼看到那个东西才加的，比订阅来的更可信。\n" +
+                    "例：藏掉美团底栏的视频入口 → 包名 com.sankuai.meituan，" +
+                    "选择器 [vid=\"bottom_tab_block\"] << [desc=\"视频\"]",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            androidx.compose.material3.OutlinedTextField(
+                value = pkg, onValueChange = { pkg = it },
+                label = { Text("包名（* 表示所有应用）") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+            )
+            androidx.compose.material3.OutlinedTextField(
+                value = sel, onValueChange = { sel = it },
+                label = { Text("选择器") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Act.entries.filter { it.allows(com.wurao.core.model.Domain.NODE) }.forEach { a ->
+                    Button(onClick = { act = a }) { Text(a.key) }
                 }
             }
+            Button(onClick = { add() }) { Text("加一条") }
+            if (tip.isNotEmpty()) Text(tip, style = MaterialTheme.typography.bodySmall)
+
+            rules.forEachIndexed { i, r ->
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(r.act.key + " · " + r.target, style = MaterialTheme.typography.bodySmall)
+                            val p = when (val s = r.scope) {
+                                is Scope.App -> s.pkg
+                                is Scope.Component -> s.pkg
+                                Scope.Global -> "所有应用"
+                            }
+                            Text(p, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Button(onClick = { save(rules.filterIndexed { j, _ -> j != i }) }) { Text("删") }
+                    }
+                }
+            }
+
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("关于", fontWeight = FontWeight.Bold)

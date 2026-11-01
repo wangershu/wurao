@@ -32,6 +32,14 @@ object Executor {
     /** 被停用的规则 id —— 排错时从命中记录点"停用"写进来。停用不等于删除。 */
     private val stopped = HashSet<String>()
 
+    /** 用户自己加的规则（检视层抓的 / 手写的），界面写、这里读。 */
+    private val userRules = ArrayList<Rule>()
+
+    fun setUserRules(list: List<Rule>) {
+        userRules.clear()
+        userRules.addAll(list)
+    }
+
     fun setStopped(ids: Collection<String>) {
         stopped.clear()
         stopped.addAll(ids)
@@ -100,10 +108,11 @@ object Executor {
      * S2 阶段只有内置规则；S3 接上订阅后，这里换成「内置 + 订阅 + 用户自抓」的合并结果，
      * 顺序按「用户自抓 > 订阅 > 内置」（自定规则是亲眼看到才建的，最可信）。
      */
-    private fun activeRules(pkg: String): List<Rule> =
-        Builtin.rules().filter {
-            it.enabled && it.enabledFor(pkg) && !excluded.contains(pkg) && it.id !in stopped
-        }
+    private fun activeRules(pkg: String): List<Rule> {
+        fun usable(r: Rule) = r.enabled && r.enabledFor(pkg) && !excluded.contains(pkg) && r.id !in stopped
+        // 用户自己抓的规则排前面：他是亲眼看到那个广告才建的，比内置规则更可信
+        return userRules.filter(::usable) + Builtin.rules().filter(::usable)
+    }
 
     /** 排障用：当前节奏状态。 */
     fun debugState(): String = "page=${pacing.currentPage} paused=${pacing.isPaused}"
