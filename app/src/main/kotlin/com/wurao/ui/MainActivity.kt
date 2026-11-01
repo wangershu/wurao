@@ -173,17 +173,25 @@ class MainActivity : ComponentActivity() {
             finish()
             return true
         }
+        // 导入一律**放后台**：一万多条域名在主线程解析+入库+推送会把界面卡死（实测 ANR）。
+        // 这里是调试入口，更要守这条 —— 否则"导入大表"直接把模块搞成无响应。
+        intent?.getStringExtra("import_file")?.let { path ->
+            runInBackground {
+                val body = runCatching { java.io.File(path).readText() }.getOrNull()
+                if (body.isNullOrBlank()) "读不到文件：$path" else importSource(body)
+            }
+            return false
+        }
         intent?.getStringExtra("import_sub_b64")?.let {
-            val text = runCatching {
+            val raw = runCatching {
                 String(android.util.Base64.decode(it, android.util.Base64.DEFAULT))
             }.getOrNull()
-            if (!text.isNullOrBlank()) {
-                val report = importSource(text)
-                android.util.Log.i("Wurao", "import: $report")
-                android.widget.Toast.makeText(this, report, 1).show()
+            if (raw.isNullOrBlank()) {
+                finish()
+                return true
             }
-            finish()
-            return true
+            runInBackground { importSource(raw) }
+            return false
         }
         intent?.getStringExtra("tab")?.toIntOrNull()?.let {
             initialTab = it
@@ -374,6 +382,21 @@ class MainActivity : ComponentActivity() {
     /**
      * 从网址导入：下载与解析都放后台线程 —— 订阅动辄 1MB，在 UI 线程解析会卡住界面。
      */
+    /**
+     * 跑到后台线程再回主线程报结果。导入类操作都走它 ——
+     * 主线程做这种量级的活会 ANR（实测导入一万多条域名时就是这么卡的）。
+     */
+    private fun runInBackground(work: () -> String) {
+        Thread {
+            val report = runCatching { work() }.getOrDefault("导入失败")
+            runOnUiThread {
+                android.util.Log.i("Wurao", "import: $report")
+                android.widget.Toast.makeText(this, report, 1).show()
+                finish()
+            }
+        }.start()
+    }
+
     private fun importSourceUrl(url: String, done: (String) -> Unit) {
         Thread {
             val started = System.currentTimeMillis()
