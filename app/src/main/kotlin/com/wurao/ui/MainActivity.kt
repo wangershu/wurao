@@ -142,6 +142,15 @@ class MainActivity : ComponentActivity() {
             finish()
             return true
         }
+        intent?.getStringExtra("import_url")?.let { url ->
+            android.util.Log.i("Wurao", "开始从网址导入: $url")
+            importSourceUrl(url) { report ->
+                android.util.Log.i("Wurao", "import_url: $report")
+                android.widget.Toast.makeText(this, report, 1).show()
+                finish()
+            }
+            return false
+        }
         intent?.getStringExtra("export")?.let {
             val text = exportText()
             android.util.Log.i("Wurao", "export: ${text.length} 字符 :: " + text.take(160))
@@ -334,6 +343,36 @@ class MainActivity : ComponentActivity() {
         prefs().edit().putString(Cfg.KEY_RULES, Cfg.encodeRules(all)).apply()
         CfgPush.flush(this)
         return all.size
+    }
+
+    /**
+     * 从网址导入：下载与解析都放后台线程 —— 订阅动辄 1MB，在 UI 线程解析会卡住界面。
+     */
+    private fun importSourceUrl(url: String, done: (String) -> Unit) {
+        Thread {
+            val started = System.currentTimeMillis()
+            // 必须设超时：不设的话网络不通时会一直挂着，看起来就是「点了没反应」
+            val result = runCatching {
+                val conn = java.net.URL(url).openConnection()
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 25_000
+                conn.getInputStream().bufferedReader().readText()
+            }
+            val report = result.fold(
+                onSuccess = { body ->
+                    if (body.isBlank()) {
+                        "下载内容为空"
+                    } else {
+                        val r = importSource(body)
+                        "$r；耗时 ${System.currentTimeMillis() - started}ms，原文 ${body.length} 字符"
+                    }
+                },
+                onFailure = { e ->
+                    "下载失败：${e.javaClass.simpleName} ${e.message?.take(70) ?: ""}"
+                }
+            )
+            runOnUiThread { done(report) }
+        }.start()
     }
 
     private fun prefs() = getSharedPreferences(Cfg.GROUP, MODE_PRIVATE)
@@ -729,14 +768,7 @@ class MainActivity : ComponentActivity() {
                     }
                     if (t.startsWith("http")) {
                         subReport = "下载中…"
-                        // 联网不能在 UI 线程，丢到后台；回来再解析
-                        Thread {
-                            val body = runCatching { java.net.URL(t).readText() }.getOrNull()
-                            runOnUiThread {
-                                if (body == null) subReport = "下载失败（网址或网络问题）"
-                                else subReport = importSource(body)
-                            }
-                        }.start()
+                        importSourceUrl(t) { subReport = it }
                     } else {
                         subReport = importSource(t)
                     }
