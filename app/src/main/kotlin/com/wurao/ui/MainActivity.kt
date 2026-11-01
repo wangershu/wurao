@@ -79,8 +79,16 @@ class MainActivity : ComponentActivity() {
     /** 调试直达要打开的详情页包名（--es open_pkg） */
     private var initialPkg: String? = null
 
+    /** 调试直达要落到哪个页签（--es tab 2）；adb shell 没有 INJECT_EVENTS，
+        没法用 input tap 点页签，只能走这条路 */
+    private var initialTab: Int = 0
+
     private fun handleDirect(intent: android.content.Intent?): Boolean {
         // 直接进某个应用的详情页，省得每次点半天
+        intent?.getStringExtra("tab")?.toIntOrNull()?.let {
+            initialTab = it
+            return false
+        }
         intent?.getStringExtra("open_pkg")?.takeIf { it.isNotBlank() }?.let {
             initialPkg = it
             return false
@@ -129,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun WuraoApp() {
-        var tab by remember { mutableStateOf(0) }
+        var tab by remember { mutableStateOf(initialTab) }
         var openPkg by remember { mutableStateOf<String?>(initialPkg) }
 
         MaterialTheme {
