@@ -526,6 +526,28 @@ class MainActivity : ComponentActivity() {
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Text("自检", fontWeight = FontWeight.Bold)
+                    Text("框架：${if (CfgPush.bound) "已连接" else "未连接"}")
+                    Text("抓屏服务：${if (SnapshotService.active) "已开启" else "未开启"}")
+                    Text("我的规则：${rules.size} 条")
+                    Text("命中记录：${HitStore.all().size} 条")
+                    val paused = prefs().getString(Cfg.KEY_PAUSED, null) == "true"
+                    Text("一键全停：${if (paused) "已停（什么都不做）" else "运行中"}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            prefs().edit().putString(Cfg.KEY_PAUSED, "true").apply()
+                            CfgPush.flush(this@MainActivity)
+                        }) { Text("全部停") }
+                        Button(onClick = {
+                            prefs().edit().putString(Cfg.KEY_PAUSED, "false").apply()
+                            CfgPush.flush(this@MainActivity)
+                        }) { Text("恢复") }
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
                     Text("关于", fontWeight = FontWeight.Bold)
                     Text("只自用，不分发。风险级能力默认全关，出问题点「全部退回」。")
                 }

@@ -87,6 +87,9 @@ class HookEntry : XposedModule() {
      */
     private fun loadConfig(pkg: String, cl: ClassLoader) {
         val cfg = CfgReader.readAll(this)
+        // 一键全停：读不到就当作没停（安全的方向是"继续动作"还是"停"？
+        // 这里选"没说停就继续"，因为全停是用户主动按的，必须有明确记录）
+        Executor.setPaused(cfg[Cfg.KEY_PAUSED] == "true")
         val userRules = Cfg.decodeRules(cfg[Cfg.KEY_USER_RULES])
         Executor.setUserRules(userRules)
         Executor.setStopped(Cfg.decodeList(cfg[Cfg.KEY_STOPPED]))
