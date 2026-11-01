@@ -20,9 +20,12 @@
         <!-- 写全名：namespace 是 com.wurao、applicationId 是 com.wurao.app，
              用相对名 ".ui.MainActivity" 会被按 applicationId 解析成
              com.wurao.app.ui.MainActivity，然后找不到 -->
+        <!-- singleTop：调试直达靠 am start 传 extra，Activity 已在栈里时
+             只有 singleTop 才会走 onNewIntent，否则直达会「看起来没反应」 -->
         <activity
             android:name="com.wurao.ui.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

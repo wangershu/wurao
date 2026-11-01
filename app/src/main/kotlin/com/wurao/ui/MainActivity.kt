@@ -89,6 +89,28 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDirect(intent: android.content.Intent?): Boolean {
         // 直接进某个应用的详情页，省得每次点半天
+        // 抓屏：置上标记，然后切到目标 App（adb 点不了按钮，只能这样触发）
+        intent?.getStringExtra("capture")?.let {
+            val ok = SnapshotService.active
+            SnapshotService.wantCapture = true
+            android.util.Log.i("Wurao", "抓屏：服务=${if (ok) "已连接" else "未连接"}，已置标记，请切到目标 App")
+            finish()
+            return true
+        }
+        // 打印抓到的控件（adb 看不到长列表，只能打日志）
+        intent?.getStringExtra("picks")?.let {
+            val list = SnapshotService.lastSnapshot
+            android.util.Log.i("Wurao", "抓到 ${list?.size ?: 0} 个控件（${SnapshotService.lastPkg}）")
+            list?.take(8)?.forEach { pick ->
+                val n = pick.node
+                android.util.Log.i(
+                    "Wurao",
+                    "  ${n.className.substringAfterLast('.')} | text=${n.text} | desc=${n.desc} | vid=${n.vid} | 容器=${pick.container?.vid}"
+                )
+            }
+            finish()
+            return true
+        }
         intent?.getStringExtra("export")?.let {
             val text = exportText()
             android.util.Log.i("Wurao", "export: ${text.length} 字符 :: " + text.take(160))
@@ -510,7 +532,10 @@ class MainActivity : ComponentActivity() {
                 Text("抓屏", fontWeight = FontWeight.Bold)
                 if (!SnapshotService.active) {
                     Text(
-                        "要先在系统设置里开启「无扰」的抓屏服务。Xposed 读不到别的 App 的界面，这层必须靠无障碍。",
+                        "抓屏服务没连上。Xposed 读不到别的 App 的界面，这层必须靠无障碍。
+" +
+                            "若设置里已经打开过，请**关掉再打开一次** —— 更新 APK 会让服务失效，" +
+                            "重新开关它才会重新绑定（这点在排查时坑过好几次）。",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(onClick = {
