@@ -101,7 +101,6 @@ class MainActivity : ComponentActivity() {
 
     /** 调试直达要落到哪个页签（--es tab 2）；adb shell 没有 INJECT_EVENTS，
         没法用 input tap 点页签，只能走这条路 */
-    private var initialTab: Int = 0
 
     private fun handleDirect(intent: android.content.Intent?): Boolean {
         // 直接进某个应用的详情页，省得每次点半天
@@ -803,17 +802,11 @@ class MainActivity : ComponentActivity() {
                         startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }) { Text("去开启") }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            SnapshotService.wantPkg = pkg
-                            SnapshotService.wantCapture = true
-                            scanNote = "已就绪：请切到 $pkg，再切回来点「看看抓到没」"
-                        }) { Text("抓一屏") }
-                        Button(onClick = {
-                            picks = SnapshotService.lastSnapshot ?: emptyList()
-                            scanNote = "抓到 ${picks.size} 个控件（${SnapshotService.lastPkg ?: "?"}）"
-                        }) { Text("看看抓到没") }
-                    }
+                    Button(onClick = {
+                        SnapshotService.wantPkg = pkg
+                        SnapshotService.wantCapture = true
+                        scanNote = "已就绪：切到 $pkg，控件会被橙框框出来，点一下就选中并生成规则（点空白处取消）"
+                    }) { Text("抓一屏") }
                 }
                 if (scanNote.isNotEmpty()) Text(scanNote, style = MaterialTheme.typography.bodySmall)
             }
