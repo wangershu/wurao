@@ -70,7 +70,10 @@ object Executor {
             val done = runCatching { Actor.perform(rule.act, target) }.getOrDefault(false)
             if (done) {
                 pacing.record(rule, now)
-                return rule.note.ifBlank { rule.act.key }
+                val note = rule.note.ifBlank { rule.act.key }
+                // 这条日志由**目标进程**打出 —— 进程内生效的证据就是它（PID 不是模块进程）
+                Log.i("命中[$pkg] $note <- ${rule.target}")
+                return note
             }
         }
         return null
