@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="false" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 应用列表：Android 11+ 的标准要求 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- 应用列表：MIUI / HyperOS 自己加的运行时权限。
+         只声明上一颗时，HyperOS 上 getInstalledPackages() 只返回自己这一个包。 -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS"
+        tools:ignore="MissingPermission" />
+    <!-- 订阅下载 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="false"
+        android:label="无扰"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <!-- 写全名：namespace 是 com.wurao、applicationId 是 com.wurao.app，
+             用相对名 ".ui.MainActivity" 会被按 applicationId 解析成
+             com.wurao.app.ui.MainActivity，然后找不到 -->
+        <activity
+            android:name="com.wurao.ui.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
 </manifest>

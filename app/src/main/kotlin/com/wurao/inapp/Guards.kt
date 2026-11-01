@@ -25,8 +25,8 @@ import com.wurao.inapp.HookKit.hookSafe
  */
 object Guards {
 
-    fun install(base: XposedInterface, pkg: String, cl: ClassLoader) {
-        if (RiskGate.isEnabled(pkg, RiskGate.Kind.COMPONENT)) installComponent(base, pkg)
+    fun install(base: XposedInterface, pkg: String, cl: ClassLoader, extraComponents: List<String> = emptyList()) {
+        if (RiskGate.isEnabled(pkg, RiskGate.Kind.COMPONENT)) installComponent(base, pkg, extraComponents)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.NET)) installNet(base, pkg)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.SDK)) installSdk(base, pkg, cl)
     }
@@ -38,8 +38,9 @@ object Guards {
      *
      * 这是原版 at=9「防火墙拦截」的做法 —— 比"打开后再 finish"好得多：不闪、不崩。
      */
-    private fun installComponent(base: XposedInterface, pkg: String) {
-        val targets = Seed.adComponents[pkg] ?: return
+    private fun installComponent(base: XposedInterface, pkg: String, extra: List<String>) {
+        val targets = ((Seed.adComponents[pkg] ?: emptyList()) + extra).distinct()
+        if (targets.isEmpty()) return
         if (targets.isEmpty()) return
 
         val methods = HookKit.findAll(Activity::class.java, "startActivity")

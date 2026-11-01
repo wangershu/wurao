@@ -3,6 +3,8 @@ package com.wurao.inapp
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import com.wurao.core.Cfg
+import com.wurao.core.RiskGate
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
@@ -51,12 +53,37 @@ class HookEntry : XposedModule() {
             }.onFailure { Log.w("onResume 回调出错: ${it.message}") }
             result
         }
+        // 界面上开的风险级能力（UI 进程写、这里读）。读不到就维持全关 —— 安全第一。
+        loadRiskConfig(pkg)
+
         // L0 三件套（组件 / DNS / SDK）：默认全关，按 App 在界面里开。
         // 装不装得上看 RiskGate —— 没开的应用一个 hook 都不装，零开销。
-        runCatching { Guards.install(this, pkg, param.classLoader ?: javaClass.classLoader) }
+        // 界面上勾选的自动分析候选（UI 写、这里读）
+        val extra = runCatching {
+            getRemotePreferences(Cfg.GROUP)
+                ?.getString(Cfg.componentsKey(pkg), null)
+                ?.let { Cfg.decodeList(it) }
+        }.getOrNull() ?: emptyList()
+
+        runCatching { Guards.install(this, pkg, param.classLoader ?: javaClass.classLoader, extra) }
             .onFailure { Log.w("L0 装配失败: ${it.message}") }
 
         Log.i("已装配: $pkg")
+    }
+
+    /**
+     * 读界面上配置的开关。
+     *
+     * 拿不到偏好（没配过 / 框架不支持）就什么都不开 —— **读失败必须等于全关**，
+     * 反过来的话一个读错就会把风险级能力全打开，那是要出事的。
+     */
+    private fun loadRiskConfig(pkg: String) {
+        val prefs = runCatching { getRemotePreferences(Cfg.GROUP) }.getOrNull() ?: return
+        val raw = runCatching { prefs?.getString(Cfg.riskKey(pkg), null) }.getOrNull() ?: return
+        RiskGate.disableAll(pkg)
+        val kinds = Cfg.decodeKinds(raw)
+        kinds.forEach { RiskGate.enable(pkg, it) }
+        if (kinds.isNotEmpty()) Log.i("风险级能力[$pkg]: ${Cfg.encodeKinds(kinds)}")
     }
 
     /** 排除自己和系统桌面/芯片相关包（原版就这么干，避免无谓开销）。 */

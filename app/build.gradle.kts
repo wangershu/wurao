@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    // AGP 9 起 Kotlin 编译已内置，不再单独声明 org.jetbrains.kotlin.android。
-    // kotlin-compose 等 S5 做 UI 时再加（现在加会因为缺 compose runtime 直接编译失败）
+    // AGP 9 起 Kotlin 编译已内置，不再单独声明 org.jetbrains.kotlin.android
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -28,12 +28,15 @@ android {
     kotlin {
         compilerOptions {
             jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+            freeCompilerArgs.addAll(
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+            )
         }
     }
 
     buildFeatures {
         buildConfig = true
-        // compose = true 留到 S5（UI 阶段）再开
+        compose = true
     }
 
     // core 层跑在 JVM 单测里，碰到 android.util.Log 会抛 "not mocked"
@@ -53,5 +56,18 @@ android {
 dependencies {
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
+
+    // ---------- UI ----------
+    // 视觉组件先用 material3 把骨架跑通；上一版用的是 miuix（MIUI 风格），
+    // 骨架稳定后再换回去 —— 换的是组件库，信息架构（三个页签）不变。
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.activity)
+    implementation(libs.compose.lifecycle.runtime)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime)
+
     testImplementation(libs.junit)
 }
