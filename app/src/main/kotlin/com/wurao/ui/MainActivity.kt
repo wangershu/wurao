@@ -38,6 +38,7 @@ import com.wurao.core.model.Scope
 import com.wurao.assist.SnapshotService
 import com.wurao.core.Cfg
 import com.wurao.core.source.GkdSubscription
+import com.wurao.core.store.RuleStore
 import com.wurao.core.source.HostList
 import com.wurao.core.RiskGate
 import com.wurao.core.analyze.AdComponentFinder
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
+        restoreRules()
         // 绑上框架服务后会把本地配置推进 hook 进程；之后每次改动也会推
         CfgPush.bind(this)
 
@@ -200,14 +202,15 @@ class MainActivity : ComponentActivity() {
         val head: String
         if (looksLikeSub) {
             val r = GkdSubscription.parse(text)
-            rules = r.rules
+            val report = RuleStore.import(r)
             val reasons = r.skipped.take(3).joinToString("；") { it.reason }
-            head = "订阅共 ${r.total} 条：采用 ${rules.size}，跳过 ${r.skipped.size}" +
-                (if (r.skipped.isNotEmpty()) "（例如：$reasons）" else "")
+            head = "订阅共 ${r.total} 条：采用 ${report.added}，跳过 ${report.skipped}" +
+                (if (r.skipped.isNotEmpty()) "（例如：$reasons）" else "") +
+                "；库里现在共 ${RuleStore.all().size} 条"
         } else {
             val h = HostList.parse(text)
-            rules = h.hosts.map { domain ->
-                Rule(
+            h.hosts.forEach { domain ->
+                RuleStore.upsert(Rule(
                     domain = com.wurao.core.model.Domain.HOST,
                     target = domain,
                     act = Act.BLOCK,
@@ -216,13 +219,12 @@ class MainActivity : ComponentActivity() {
                     groupKey = "hosts",
                     ruleKey = domain.hashCode().toString(),
                     note = "广告域名",
-                )
+                ))
             }
-            head = "域名表：认出 ${rules.size} 个域名" +
+            head = "域名表：认出 ${h.hosts.size} 个域名" +
                 (if (h.ignoredLines > 0) "，看不懂的行 ${h.ignoredLines} 行" else "")
         }
-        prefs().edit().putString(Cfg.KEY_SUB_RULES, Cfg.encodeRules(rules)).apply()
-        CfgPush.flush(this)
+        pushRules()
         return head
     }
 
@@ -251,6 +253,34 @@ class MainActivity : ComponentActivity() {
         e.apply()
         CfgPush.flush(this)
         return "已恢复 $n 项配置"
+    }
+
+    /**
+     * 把落盘的规则读回规则库。
+     *
+     * 第一次还会把旧的两份（user_rules / sub_rules）迁进来 ——
+     * 你已经配好的规则不能因为这次统一而丢掉。
+     */
+    private fun restoreRules() {
+        val unified = Cfg.decodeRules(prefs().getString(Cfg.KEY_RULES, null))
+        if (unified.isNotEmpty()) {
+            unified.forEach { RuleStore.upsert(it) }
+            return
+        }
+        val legacy = Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null)) +
+            Cfg.decodeRules(prefs().getString(Cfg.KEY_SUB_RULES, null))
+        if (legacy.isEmpty()) return
+        legacy.forEach { RuleStore.upsert(it) }
+        pushRules()
+        android.util.Log.i("Wurao", "规则迁移：${legacy.size} 条 -> 统一键")
+    }
+
+    /** 规则有任何改动都要调一次：写统一键并推送到 hook 进程。 */
+    private fun pushRules(): Int {
+        val all = RuleStore.all()
+        prefs().edit().putString(Cfg.KEY_RULES, Cfg.encodeRules(all)).apply()
+        CfgPush.flush(this)
+        return all.size
     }
 
     private fun prefs() = getSharedPreferences(Cfg.GROUP, MODE_PRIVATE)
@@ -306,7 +336,11 @@ class MainActivity : ComponentActivity() {
         fun toggleStop(ruleId: String) {
             val next = if (ruleId in stopped) stopped - ruleId else stopped + ruleId
             stopped = next
-            prefs().edit().putString(Cfg.KEY_STOPPED, Cfg.encodeList(next)).apply()
+            // 停用改规则本身（不是另存一份名单）—— 规则库只有一处，不会两边对不上。
+            // 停用不等于删除：规则还在库里，随时能恢复。
+            RuleStore.setEnabled(ruleId, ruleId !in stopped)
+            rows = HitStore.all()
+            pushRules()
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -575,12 +609,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsScreen() {
-        var rules by remember { mutableStateOf(Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))) }
+        var rules by remember { mutableStateOf(RuleStore.all()) }
 
-        fun save(list: List<Rule>) {
-            rules = list
-            prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(list)).apply()
-            CfgPush.flush(this)
+        fun save() {
+            rules = RuleStore.all()
+            pushRules()
         }
 
         var pkg by remember { mutableStateOf("") }
@@ -613,9 +646,10 @@ class MainActivity : ComponentActivity() {
                 tip = "这条规则不合法：" + issues.joinToString("；")
                 return
             }
-            save(rules + r)
+            RuleStore.upsert(r)
+            save()
             sel = ""
-            tip = "已加（${rules.size + 1} 条）"
+            tip = "已加（共 ${rules.size} 条）"
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -696,7 +730,10 @@ class MainActivity : ComponentActivity() {
                             }
                             Text(p, style = MaterialTheme.typography.bodySmall)
                         }
-                        Button(onClick = { save(rules.filterIndexed { j, _ -> j != i }) }) { Text("删") }
+                        Button(onClick = {
+                            RuleStore.remove(r.id)
+                            save()
+                        }) { Text("删") }
                     }
                 }
             }

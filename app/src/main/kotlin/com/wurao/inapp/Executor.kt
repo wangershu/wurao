@@ -4,6 +4,7 @@ import android.view.View
 import com.wurao.core.Builtin
 import com.wurao.core.HitLog
 import com.wurao.core.Pacing
+import com.wurao.core.model.Origin
 import com.wurao.core.model.Rule
 import com.wurao.core.selector.Selector
 import com.wurao.core.selector.SelectorMatcher
@@ -32,20 +33,16 @@ object Executor {
     /** 被停用的规则 id —— 排错时从命中记录点"停用"写进来。停用不等于删除。 */
     private val stopped = HashSet<String>()
 
-    /** 用户自己加的规则（检视层抓的 / 手写的），界面写、这里读。 */
-    private val userRules = ArrayList<Rule>()
+    /** 界面送过来的规则（自抓 + 订阅 + 自动分析候选），界面写、这里读。 */
+    private val remoteRules = ArrayList<Rule>()
 
-    /** 订阅导入来的规则，界面写、这里读。 */
-    private val subRules = ArrayList<Rule>()
-
-    fun setUserRules(list: List<Rule>) {
-        userRules.clear()
-        userRules.addAll(list)
-    }
-
-    fun setSubRules(list: List<Rule>) {
-        subRules.clear()
-        subRules.addAll(list)
+    /**
+     * 排序：自己抓的 > 订阅/自动分析 > 内置。
+     * 你是亲眼看到那个东西才抓的，比订阅来的更可信，所以先试它。
+     */
+    fun setRules(list: List<Rule>) {
+        remoteRules.clear()
+        remoteRules.addAll(list.sortedBy { priorityOf(it) })
     }
 
     fun setStopped(ids: Collection<String>) {
@@ -120,7 +117,14 @@ object Executor {
     private fun activeRules(pkg: String): List<Rule> {
         fun usable(r: Rule) = r.enabled && r.enabledFor(pkg) && !excluded.contains(pkg) && r.id !in stopped
         // 用户自己抓的规则排前面：他是亲眼看到那个广告才建的，比内置规则更可信
-        return userRules.filter(::usable) + subRules.filter(::usable) + Builtin.rules().filter(::usable)
+        return remoteRules.filter(::usable) + Builtin.rules().filter(::usable)
+    }
+
+    private fun priorityOf(r: Rule): Int = when (r.origin) {
+        Origin.User -> 0
+        is Origin.Subscription -> 1
+        is Origin.Seed -> 1
+        Origin.Builtin -> 2
     }
 
     /** 排障用：当前节奏状态。 */

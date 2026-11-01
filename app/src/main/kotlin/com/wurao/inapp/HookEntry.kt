@@ -90,10 +90,10 @@ class HookEntry : XposedModule() {
         // 一键全停：读不到就当作没停（安全的方向是"继续动作"还是"停"？
         // 这里选"没说停就继续"，因为全停是用户主动按的，必须有明确记录）
         Executor.setPaused(cfg[Cfg.KEY_PAUSED] == "true")
-        val userRules = Cfg.decodeRules(cfg[Cfg.KEY_USER_RULES])
-        Executor.setUserRules(userRules)
-        val subRules = Cfg.decodeRules(cfg[Cfg.KEY_SUB_RULES])
-        Executor.setSubRules(subRules)
+        // 统一键优先；没有就退回旧的两份（兼容已经配过规则的手机）
+        val rules = Cfg.decodeRules(cfg[Cfg.KEY_RULES]).takeIf { it.isNotEmpty() }
+            ?: (Cfg.decodeRules(cfg[Cfg.KEY_USER_RULES]) + Cfg.decodeRules(cfg[Cfg.KEY_SUB_RULES]))
+        Executor.setRules(rules)
         Executor.setStopped(Cfg.decodeList(cfg[Cfg.KEY_STOPPED]))
 
         val kinds = Cfg.decodeKinds(cfg[Cfg.riskKey(pkg)])
@@ -102,12 +102,12 @@ class HookEntry : XposedModule() {
 
         val extra = Cfg.decodeList(cfg[Cfg.componentsKey(pkg)])
         // 订阅里的域名表（HOST 域规则）并进 DNS 拦截
-        val extraHosts = subRules.filter { it.domain == com.wurao.core.model.Domain.HOST }
+        val extraHosts = rules.filter { it.domain == com.wurao.core.model.Domain.HOST }
             .map { it.target }
         runCatching { Guards.install(this, pkg, cl, extra, extraHosts) }
             .onFailure { Log.w("L0 装配失败: ${it.message}") }
 
-        Log.i("配置就位[$pkg]: 自定=${userRules.size} 订阅=${subRules.size} 风险级=${Cfg.encodeKinds(kinds)} 额外组件=${extra.size} 订阅域名=${extraHosts.size}")
+        Log.i("配置就位[$pkg]: 规则=${rules.size} 风险级=${Cfg.encodeKinds(kinds)} 额外组件=${extra.size} 订阅域名=${extraHosts.size}")
     }
 
 
