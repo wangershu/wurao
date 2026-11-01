@@ -51,6 +51,11 @@ class HookEntry : XposedModule() {
             }.onFailure { Log.w("onResume 回调出错: ${it.message}") }
             result
         }
+        // L0 三件套（组件 / DNS / SDK）：默认全关，按 App 在界面里开。
+        // 装不装得上看 RiskGate —— 没开的应用一个 hook 都不装，零开销。
+        runCatching { Guards.install(this, pkg, param.classLoader ?: javaClass.classLoader) }
+            .onFailure { Log.w("L0 装配失败: ${it.message}") }
+
         Log.i("已装配: $pkg")
     }
 

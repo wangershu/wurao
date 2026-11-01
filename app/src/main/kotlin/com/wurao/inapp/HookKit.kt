@@ -43,4 +43,12 @@ internal object HookKit {
         // getDeclaredMethod 找不到时再试一次含继承的
         cls.getMethod(name, *params)
     }.getOrNull()
+
+    /**
+     * 按名字找**所有**同名方法（重载都要 hook，否则会漏）。
+     * 例：`startActivity` 有 `startActivity(Intent)` 和 `startActivity(Intent, Bundle)` 两个签名。
+     */
+    fun findAll(cls: Class<*>?, name: String): List<Method> = runCatching {
+        cls?.declaredMethods?.filter { it.name == name } ?: emptyList()
+    }.getOrDefault(emptyList())
 }
