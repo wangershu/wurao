@@ -16,6 +16,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Screenshot
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,6 +40,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -580,12 +595,17 @@ class MainActivity : ComponentActivity() {
             Scaffold(
                 bottomBar = {
                     NavigationBar {
-                        listOf("看板", "应用", "设置").forEachIndexed { i, title ->
+                        val items = listOf(
+                            "看板" to Icons.Default.Assessment,
+                            "应用" to Icons.Default.Apps,
+                            "设置" to Icons.Default.Settings,
+                        )
+                        items.forEachIndexed { i, (title, vec) ->
                             NavigationBarItem(
                                 selected = tab == i,
                                 onClick = { tab = i; tabState = i; openPkg = null },
                                 label = { Text(title) },
-                                icon = {},
+                                icon = { Icon(vec, contentDescription = title) },
                             )
                         }
                     }
@@ -637,7 +657,11 @@ class MainActivity : ComponentActivity() {
                 style = MaterialTheme.typography.bodySmall,
             )
             if (rows.isEmpty()) {
-                Text("还没有记录。目标 App 里真的动手之后，记录会从它的进程送回来。")
+                EmptyHint(
+                    Icons.Default.Assessment,
+                    "还没有记录",
+                    "目标 App 里真的动手之后，记录会从它的进程送回来。",
+                )
             } else {
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(rows) { r ->
@@ -806,7 +830,7 @@ class MainActivity : ComponentActivity() {
                         SnapshotService.wantPkg = pkg
                         SnapshotService.wantCapture = true
                         scanNote = "已就绪：切到 $pkg，控件会被橙框框出来，点一下就选中并生成规则（点空白处取消）"
-                    }) { Text("抓一屏") }
+                    }) { Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("抓一屏") }
                 }
                 if (scanNote.isNotEmpty()) Text(scanNote, style = MaterialTheme.typography.bodySmall)
             }
@@ -960,7 +984,7 @@ class MainActivity : ComponentActivity() {
                     } else {
                         subReport = importSource(t)
                     }
-                }) { Text("导入") }
+                }) { Icon(Icons.Default.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("导入") }
                 Button(onClick = {
                     prefs().edit().remove(Cfg.KEY_SUB_RULES).apply()
                     CfgPush.flush(this@MainActivity)
@@ -1008,7 +1032,7 @@ class MainActivity : ComponentActivity() {
                         Button(onClick = {
                             RuleStore.remove(r.id)
                             save()
-                        }) { Text("删") }
+                        }) { Icon(Icons.Default.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("删") }
                     }
                 }
             }
@@ -1035,10 +1059,10 @@ class MainActivity : ComponentActivity() {
                                 android.content.ClipData.newPlainText("wurao", backupText)
                             )
                             backupTip = "已导出并复制到剪贴板（${backupText.length} 字符）"
-                        }) { Text("导出") }
+                        }) { Icon(Icons.Default.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("导出") }
                         Button(onClick = {
                             backupTip = restoreText(backupText.trim())
-                        }) { Text("恢复") }
+                        }) { Icon(Icons.Default.Restore, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("恢复") }
                     }
                     if (backupTip.isNotEmpty()) {
                         Text(backupTip, style = MaterialTheme.typography.bodySmall)
@@ -1059,11 +1083,11 @@ class MainActivity : ComponentActivity() {
                         Button(onClick = {
                             prefs().edit().putString(Cfg.KEY_PAUSED, "true").apply()
                             CfgPush.flush(this@MainActivity)
-                        }) { Text("全部停") }
+                        }) { Icon(Icons.Default.Block, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("全部停") }
                         Button(onClick = {
                             prefs().edit().putString(Cfg.KEY_PAUSED, "false").apply()
                             CfgPush.flush(this@MainActivity)
-                        }) { Text("恢复") }
+                        }) { Icon(Icons.Default.Restore, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("恢复") }
                     }
                 }
             }
@@ -1075,5 +1099,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+/**
+ * 空状态：空列表什么都不显示会让人以为坏了，这里给个大图标 + 一句说明。
+ */
+@Composable
+private fun EmptyHint(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    desc: String,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 28.dp),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(40.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        )
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Text(
+            desc,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

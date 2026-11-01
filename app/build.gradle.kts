@@ -64,6 +64,8 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
+    // 图标：material3 本身不带图标库，这里用官方图标集（版本由上面的 compose.bom 管着）
+    implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.compose.activity)
     implementation(libs.compose.lifecycle.runtime)
     implementation(libs.androidx.core.ktx)
