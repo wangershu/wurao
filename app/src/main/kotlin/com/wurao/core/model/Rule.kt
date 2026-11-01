@@ -125,6 +125,13 @@ data class Rule(
     /** GOTO 的落地组件；其它动作为 null。 */
     val gotoTarget: String? = null,
 
+    /**
+     * 页面限定（对应 GKD 的 activityIds）：只在这些 Activity 里生效，空 = 不限页面。
+     * **这是进程内最便宜的一道闸** —— 订阅里 78% 的规则写了它，
+     * 页面不对就整条跳过，一次匹配都不做（耗电约束见 plan 第八节）。
+     */
+    val activityIds: List<String> = emptyList(),
+
     /** 一句人话，给界面和日志看。 */
     val note: String = "",
 
@@ -167,6 +174,16 @@ data class Rule(
             issues += Issue("timing.matchWindowMs", "必须为正")
         }
         return issues
+    }
+
+    /**
+     * 页面闸：当前 Activity 是否是这条规则指定的页面。
+     * 没写 activityIds 就是不限页面（返回 true）。
+     */
+    fun matchesPage(activityName: String?): Boolean {
+        if (activityIds.isEmpty()) return true
+        if (activityName.isNullOrBlank()) return false
+        return activityIds.any { it == activityName || activityName.endsWith(it) }
     }
 
     /** 这条规则在某个应用上是否启用（考虑例外名单）。 */
