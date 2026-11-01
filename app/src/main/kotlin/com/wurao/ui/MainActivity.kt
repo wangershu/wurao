@@ -56,7 +56,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
-        restoreRules()
+        // 后台加载规则库，加载完置 rulesLoaded 让界面刷新（不阻塞主线程）
+        Thread {
+            restoreRules()
+            runOnUiThread { rulesLoaded = true }
+        }.start()
         // 绑上框架服务后会把本地配置推进 hook 进程；之后每次改动也会推
         CfgPush.bind(this)
 
@@ -82,6 +86,18 @@ class MainActivity : ComponentActivity() {
     /** @return true 表示这条 intent 是调试直达，已经处理完（调用方应 finish） */
     /** 调试直达要打开的详情页包名（--es open_pkg） */
     private var initialPkg: String? = null
+
+    /**
+     * 规则库是否已在后台加载完。**放后台是必须的**：几万条规则在主线程解析会 ANR
+     * （现在 2.8 万条实测不卡，但到十万条量级就会 —— 提前按这个量级做）。
+     */
+    private var rulesLoaded by mutableStateOf(false)
+
+    /**
+     * 当前页签。**放在 Activity 层**：调试直达要能直接切页，
+     * 若只放在 composable 的 remember 里，界面已经运行时直达改的只是初始值，切不动。
+     */
+    private var tabState by mutableStateOf(0)
 
     /** 调试直达要落到哪个页签（--es tab 2）；adb shell 没有 INJECT_EVENTS，
         没法用 input tap 点页签，只能走这条路 */
@@ -175,6 +191,28 @@ class MainActivity : ComponentActivity() {
         }
         // 导入一律**放后台**：一万多条域名在主线程解析+入库+推送会把界面卡死（实测 ANR）。
         // 这里是调试入口，更要守这条 —— 否则"导入大表"直接把模块搞成无响应。
+        // 抓屏链路的后半段：用抓到的第 N 个控件生成规则并保存
+        // （adb 点不了列表，只能给序号）
+        intent?.getStringExtra("gen_rule")?.let { idxStr ->
+            val idx = idxStr.toIntOrNull() ?: 0
+            val pick = SnapshotService.lastSnapshot?.getOrNull(idx)
+            if (pick == null) {
+                android.util.Log.i("Wurao", "gen_rule: 没有第 $idx 个控件（先抓屏）")
+                finish()
+                return true
+            }
+            val pkg = pick.pkg ?: ""
+            val rules = RuleGen.rules(pkg, pick.node, pick.container, act = Act.HIDE)
+            rules.forEach { RuleStore.upsert(it) }
+            pushRulesAsync()
+            android.util.Log.i(
+                "Wurao",
+                "gen_rule: 由「${pick.node.text ?: pick.node.desc ?: pick.node.vid}」生成 ${rules.size} 条，" +
+                    "第一条 = ${rules.firstOrNull()?.target}"
+            )
+            finish()
+            return true
+        }
         intent?.getStringExtra("import_file")?.let { path ->
             runInBackground {
                 // 不以 / 开头就当文件名，读 App 自己的目录（filesDir）——
@@ -199,7 +237,7 @@ class MainActivity : ComponentActivity() {
             return false
         }
         intent?.getStringExtra("tab")?.toIntOrNull()?.let {
-            initialTab = it
+            tabState = it
             return false
         }
         intent?.getStringExtra("open_pkg")?.takeIf { it.isNotBlank() }?.let {
@@ -467,7 +505,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun WuraoApp() {
-        var tab by remember { mutableStateOf(initialTab) }
+        var tab by remember { mutableStateOf(tabState) }
         var openPkg by remember { mutableStateOf<String?>(initialPkg) }
 
         MaterialTheme {
@@ -477,7 +515,7 @@ class MainActivity : ComponentActivity() {
                         listOf("看板", "应用", "设置").forEachIndexed { i, title ->
                             NavigationBarItem(
                                 selected = tab == i,
-                                onClick = { tab = i; openPkg = null },
+                                onClick = { tab = i; tabState = i; openPkg = null },
                                 label = { Text(title) },
                                 icon = {},
                             )
@@ -790,6 +828,8 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun SettingsScreen() {
         var rules by remember { mutableStateOf(RuleStore.all()) }
+        // 规则库在后台加载，加载完这里要跟着刷新，否则界面永远显示空
+        LaunchedEffect(rulesLoaded) { rules = RuleStore.all() }
 
         fun save() {
             rules = RuleStore.all()

@@ -125,7 +125,8 @@ object Guards {
             }
             chain.proceed()
         }
-        Log.i("DNS 拦截已装配（${hosts.size} 个域名）: $pkg")
+        // 把占用打出来：这张表常驻在每个被 hook 的进程里，得能看见它有多大
+        Log.i("DNS 拦截已装配（${hosts.size} 个域名，占 ${hosts.bytes / 1024} KB）: $pkg")
     }
 
 
