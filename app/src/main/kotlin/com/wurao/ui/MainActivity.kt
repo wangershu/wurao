@@ -76,7 +76,15 @@ class MainActivity : ComponentActivity() {
     }
 
     /** @return true 表示这条 intent 是调试直达，已经处理完（调用方应 finish） */
+    /** 调试直达要打开的详情页包名（--es open_pkg） */
+    private var initialPkg: String? = null
+
     private fun handleDirect(intent: android.content.Intent?): Boolean {
+        // 直接进某个应用的详情页，省得每次点半天
+        intent?.getStringExtra("open_pkg")?.takeIf { it.isNotBlank() }?.let {
+            initialPkg = it
+            return false
+        }
         val addPkg = intent?.getStringExtra("add_pkg")
         // 选择器里有 `<<`，直接用 --es 传会被 adb shell 当成 here-document 吃掉
         // （报错：here document unclosed），所以额外支持 base64 形式
@@ -122,7 +130,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun WuraoApp() {
         var tab by remember { mutableStateOf(0) }
-        var openPkg by remember { mutableStateOf<String?>(null) }
+        var openPkg by remember { mutableStateOf<String?>(initialPkg) }
 
         MaterialTheme {
             Scaffold(
