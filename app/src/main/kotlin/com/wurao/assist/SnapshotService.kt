@@ -82,7 +82,25 @@ class SnapshotService : AccessibilityService() {
         wantPkg = null
         lastPkg = pkg
         lastSnapshot = captureNow()
-        android.util.Log.i("Wurao", "抓到 ${lastSnapshot?.size ?: 0} 个控件 ($lastPkg)")
+        val n = lastSnapshot?.size ?: 0
+        android.util.Log.i("Wurao", "抓到 $n 个控件 ($lastPkg)")
+        // 抓到就把框画在当前界面上：这时你正看着目标 App，直接点选最自然，
+        // 不用再切回我们的界面去点按钮
+        val shot = lastSnapshot
+        if (!shot.isNullOrEmpty()) {
+            FrameOverlay.show(this, shot) { pick ->
+                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = com.wurao.core.model.Act.HIDE)
+                val store = com.wurao.core.store.RuleStore
+                rules.forEach { store.upsert(it) }
+                com.wurao.ui.CfgPush.flush(this)
+                android.widget.Toast.makeText(
+                    this,
+                    "已保存 ${rules.size} 条：${rules.firstOrNull()?.target}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                FrameOverlay.hide(this)
+            }
+        }
     }
 
     override fun onInterrupt() {}

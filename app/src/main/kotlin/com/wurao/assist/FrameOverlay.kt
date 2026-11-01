@@ -50,14 +50,16 @@ class FrameOverlay(
             c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
         }
         // 提示：点一下就选，再点空白处取消
-        c.drawText("点控件选中，退到后台或再抓一次会关掉这个框", 24f, height - 24f, label)
+        c.drawText("点控件选中；点没有控件的空白处取消", 24f, height - 24f, label)
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (e.action != MotionEvent.ACTION_UP) return true
         val hit = pickAt(e.x.toInt(), e.y.toInt())
         if (hit == null) {
-            Toast.makeText(ctx, "这里没有控件，再点别处", Toast.LENGTH_SHORT).show()
+            // 点空白处 = 取消。不给退路的话框会一直盖在人家界面上，你连退都退不掉
+            Toast.makeText(ctx, "已取消", Toast.LENGTH_SHORT).show()
+            hide(ctx)
             return true
         }
         onPick(hit)
