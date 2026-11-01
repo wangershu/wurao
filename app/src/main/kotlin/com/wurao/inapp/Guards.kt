@@ -25,9 +25,15 @@ import com.wurao.inapp.HookKit.hookSafe
  */
 object Guards {
 
-    fun install(base: XposedInterface, pkg: String, cl: ClassLoader, extraComponents: List<String> = emptyList()) {
+    fun install(
+        base: XposedInterface,
+        pkg: String,
+        cl: ClassLoader,
+        extraComponents: List<String> = emptyList(),
+        extraHosts: List<String> = emptyList(),
+    ) {
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.COMPONENT)) installComponent(base, pkg, extraComponents)
-        if (RiskGate.isEnabled(pkg, RiskGate.Kind.NET)) installNet(base, pkg)
+        if (RiskGate.isEnabled(pkg, RiskGate.Kind.NET)) installNet(base, pkg, extraHosts)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.SDK)) installSdk(base, pkg, cl)
     }
 
@@ -89,8 +95,8 @@ object Guards {
      * 只 hook `getByName` 这一个入口 —— 这是最便宜的一层（一次解析才一次查询）。
      * 刻意**不** hook Socket 读写层：那会让每次网络读写都变成一次规则匹配（架构里明确不做）。
      */
-    private fun installNet(base: XposedInterface, pkg: String) {
-        val hosts = Seed.adHosts
+    private fun installNet(base: XposedInterface, pkg: String, extra: List<String>) {
+        val hosts = (Seed.adHosts + extra).distinct()
         if (hosts.isEmpty()) return
         val m = HookKit.findMethod(InetAddress::class.java, "getByName", String::class.java) ?: run {
             Log.w("DNS 拦截：找不到 getByName")

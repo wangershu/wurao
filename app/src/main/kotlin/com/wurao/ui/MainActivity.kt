@@ -37,6 +37,8 @@ import com.wurao.core.model.Rule
 import com.wurao.core.model.Scope
 import com.wurao.assist.SnapshotService
 import com.wurao.core.Cfg
+import com.wurao.core.source.GkdSubscription
+import com.wurao.core.source.HostList
 import com.wurao.core.RiskGate
 import com.wurao.core.analyze.AdComponentFinder
 import com.wurao.core.analyze.RuleGen
@@ -85,6 +87,18 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDirect(intent: android.content.Intent?): Boolean {
         // 直接进某个应用的详情页，省得每次点半天
+        intent?.getStringExtra("import_sub_b64")?.let {
+            val text = runCatching {
+                String(android.util.Base64.decode(it, android.util.Base64.DEFAULT))
+            }.getOrNull()
+            if (!text.isNullOrBlank()) {
+                val report = importSource(text)
+                android.util.Log.i("Wurao", "import: $report")
+                android.widget.Toast.makeText(this, report, 1).show()
+            }
+            finish()
+            return true
+        }
         intent?.getStringExtra("tab")?.toIntOrNull()?.let {
             initialTab = it
             return false
@@ -129,6 +143,81 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return false
+    }
+
+        /**
+     * 导入一份源：认得出是 GKD 订阅还是域名表，解析后存进订阅那一份。
+     * **不静默**：跳过了多少、为什么跳过，都要写进报告给你看。
+     */
+    fun doImport(text: String): String {
+        val looksLikeSub = text.contains("globalGroups") || text.contains("apps")
+        val rules: List<Rule>
+        val head: String
+        if (looksLikeSub) {
+        val r = GkdSubscription.parse(text)
+        rules = r.rules
+        val reasons = r.skipped.take(3).joinToString("；") { it.reason }
+        head = "订阅共 ${r.total} 条：采用 ${rules.size}，跳过 ${r.skipped.size}" +
+            (if (r.skipped.isNotEmpty()) "（例如：$reasons）" else "")
+        } else {
+        val h = HostList.parse(text)
+        rules = h.hosts.map { domain ->
+            Rule(
+                domain = com.wurao.core.model.Domain.HOST,
+                target = domain,
+                act = Act.BLOCK,
+                scope = Scope.Global,
+                origin = Origin.Subscription(0),
+                groupKey = "hosts",
+                ruleKey = domain.hashCode().toString(),
+                note = "广告域名",
+            )
+        }
+        head = "域名表：认出 ${rules.size} 个域名" +
+            (if (h.ignoredLines > 0) "，看不懂的行 ${h.ignoredLines} 行" else "")
+        }
+        prefs().edit().putString(Cfg.KEY_SUB_RULES, Cfg.encodeRules(rules)).apply()
+        CfgPush.flush(this@MainActivity)
+        return head
+    }
+
+    /**
+     * 导入一份源：认得出是 GKD 订阅还是域名表，解析后存进订阅那一份。
+     *
+     * 两条规矩：
+     * - **不静默**：跳过了多少、为什么跳过，都要写进报告给你看；
+     * - 只 replace 订阅那一份，**不动你自己抓的规则**。
+     */
+    private fun importSource(text: String): String {
+        val looksLikeSub = text.contains("globalGroups") || text.contains("apps")
+        val rules: List<Rule>
+        val head: String
+        if (looksLikeSub) {
+            val r = GkdSubscription.parse(text)
+            rules = r.rules
+            val reasons = r.skipped.take(3).joinToString("；") { it.reason }
+            head = "订阅共 ${r.total} 条：采用 ${rules.size}，跳过 ${r.skipped.size}" +
+                (if (r.skipped.isNotEmpty()) "（例如：$reasons）" else "")
+        } else {
+            val h = HostList.parse(text)
+            rules = h.hosts.map { domain ->
+                Rule(
+                    domain = com.wurao.core.model.Domain.HOST,
+                    target = domain,
+                    act = Act.BLOCK,
+                    scope = Scope.Global,
+                    origin = Origin.Subscription(0),
+                    groupKey = "hosts",
+                    ruleKey = domain.hashCode().toString(),
+                    note = "广告域名",
+                )
+            }
+            head = "域名表：认出 ${rules.size} 个域名" +
+                (if (h.ignoredLines > 0) "，看不懂的行 ${h.ignoredLines} 行" else "")
+        }
+        prefs().edit().putString(Cfg.KEY_SUB_RULES, Cfg.encodeRules(rules)).apply()
+        CfgPush.flush(this)
+        return head
     }
 
     private fun prefs() = getSharedPreferences(Cfg.GROUP, MODE_PRIVATE)
@@ -464,6 +553,9 @@ class MainActivity : ComponentActivity() {
         var sel by remember { mutableStateOf("") }
         var act by remember { mutableStateOf(Act.HIDE) }
         var tip by remember { mutableStateOf("") }
+        var subText by remember { mutableStateOf("") }
+        var subReport by remember { mutableStateOf("") }
+
 
         fun add() {
             if (pkg.isBlank() || sel.isBlank()) {
@@ -491,6 +583,47 @@ class MainActivity : ComponentActivity() {
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("导入订阅 / 域名表", fontWeight = FontWeight.Bold)
+            Text(
+                "粘贴订阅内容或域名表，或填网址（联网下载）。反复导入同一份不会翻倍，" +
+                    "更新订阅也不会动你自己抓的规则。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            androidx.compose.material3.OutlinedTextField(
+                value = subText, onValueChange = { subText = it },
+                label = { Text("订阅内容或网址") },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 3,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    val t = subText.trim()
+                    if (t.isBlank()) {
+                        subReport = "先粘贴内容或填网址"
+                        return@Button
+                    }
+                    if (t.startsWith("http")) {
+                        subReport = "下载中…"
+                        // 联网不能在 UI 线程，丢到后台；回来再解析
+                        Thread {
+                            val body = runCatching { java.net.URL(t).readText() }.getOrNull()
+                            runOnUiThread {
+                                if (body == null) subReport = "下载失败（网址或网络问题）"
+                                else subReport = importSource(body)
+                            }
+                        }.start()
+                    } else {
+                        subReport = importSource(t)
+                    }
+                }) { Text("导入") }
+                Button(onClick = {
+                    prefs().edit().remove(Cfg.KEY_SUB_RULES).apply()
+                    CfgPush.flush(this@MainActivity)
+                    subReport = "已清空订阅规则（你自己抓的不受影响）"
+                }) { Text("清空订阅") }
+            }
+            if (subReport.isNotEmpty()) Text(subReport, style = MaterialTheme.typography.bodySmall)
+
             Text("我的规则", fontWeight = FontWeight.Bold)
             Text(
                 "自己加的规则优先级最高 —— 你是亲眼看到那个东西才加的，比订阅来的更可信。\n" +

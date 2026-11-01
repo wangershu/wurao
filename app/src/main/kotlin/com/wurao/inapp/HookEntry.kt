@@ -92,6 +92,8 @@ class HookEntry : XposedModule() {
         Executor.setPaused(cfg[Cfg.KEY_PAUSED] == "true")
         val userRules = Cfg.decodeRules(cfg[Cfg.KEY_USER_RULES])
         Executor.setUserRules(userRules)
+        val subRules = Cfg.decodeRules(cfg[Cfg.KEY_SUB_RULES])
+        Executor.setSubRules(subRules)
         Executor.setStopped(Cfg.decodeList(cfg[Cfg.KEY_STOPPED]))
 
         val kinds = Cfg.decodeKinds(cfg[Cfg.riskKey(pkg)])
@@ -99,10 +101,13 @@ class HookEntry : XposedModule() {
         kinds.forEach { RiskGate.enable(pkg, it) }
 
         val extra = Cfg.decodeList(cfg[Cfg.componentsKey(pkg)])
-        runCatching { Guards.install(this, pkg, cl, extra) }
+        // 订阅里的域名表（HOST 域规则）并进 DNS 拦截
+        val extraHosts = subRules.filter { it.domain == com.wurao.core.model.Domain.HOST }
+            .map { it.target }
+        runCatching { Guards.install(this, pkg, cl, extra, extraHosts) }
             .onFailure { Log.w("L0 装配失败: ${it.message}") }
 
-        Log.i("配置就位[$pkg]: 用户规则=${userRules.size} 风险级=${Cfg.encodeKinds(kinds)} 额外组件=${extra.size}")
+        Log.i("配置就位[$pkg]: 自定=${userRules.size} 订阅=${subRules.size} 风险级=${Cfg.encodeKinds(kinds)} 额外组件=${extra.size} 订阅域名=${extraHosts.size}")
     }
 
 

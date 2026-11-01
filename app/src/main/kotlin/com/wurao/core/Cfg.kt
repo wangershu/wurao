@@ -45,6 +45,12 @@ object Cfg {
     /** 用户自己加的规则（检视层抓的、或手写的）。 */
     const val KEY_USER_RULES = "user_rules"
 
+    /**
+     * 订阅导入来的规则。
+     * 与 user_rules 分开存：更新订阅时只 replace 这一份，**不动你自己抓的规则**。
+     */
+    const val KEY_SUB_RULES = "sub_rules"
+
     fun encodeList(items: Collection<String>): String = items.joinToString(",")
 
     /**
