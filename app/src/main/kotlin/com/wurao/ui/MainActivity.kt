@@ -56,11 +56,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
-        // 后台加载规则库，加载完置 rulesLoaded 让界面刷新（不阻塞主线程）
-        Thread {
-            restoreRules()
-            runOnUiThread { rulesLoaded = true }
-        }.start()
+        // 同步加载，不再放后台 —— 后台会和推送抢：加载没完就推送，
+        // 会把"半成品"写回去覆盖完整配置，实测静默丢了 6700 条规则。
+        // 2.8 万条实测不卡（ANR 记录新增 0），为它冒竞态的险不值。
+        restoreRules()
+        rulesLoaded = true
         // 绑上框架服务后会把本地配置推进 hook 进程；之后每次改动也会推
         CfgPush.bind(this)
 
@@ -193,6 +193,16 @@ class MainActivity : ComponentActivity() {
         // 这里是调试入口，更要守这条 —— 否则"导入大表"直接把模块搞成无响应。
         // 抓屏链路的后半段：用抓到的第 N 个控件生成规则并保存
         // （adb 点不了列表，只能给序号）
+        // 删掉某条规则（按选择器精确匹配）—— 验证产物不能留在库里，
+        // 否则会真的藏掉人家首页上的按钮
+        intent?.getStringExtra("del_rule")?.let { sel ->
+            val hit = RuleStore.all().filter { it.target == sel }
+            hit.forEach { RuleStore.remove(it.id) }
+            pushRulesAsync()
+            android.util.Log.i("Wurao", "del_rule: 删除 ${hit.size} 条（target=$sel）")
+            finish()
+            return true
+        }
         intent?.getStringExtra("gen_rule")?.let { idxStr ->
             val idx = idxStr.toIntOrNull() ?: 0
             val pick = SnapshotService.lastSnapshot?.getOrNull(idx)
@@ -266,11 +276,12 @@ class MainActivity : ComponentActivity() {
                 ruleKey = addSel.hashCode().toString(),
                 note = addSel,
             )
-            val old = Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))
             if (r.validate().isEmpty()) {
-                // 用 commit 不用 apply：apply 是异步的，紧接着 finish() 的话
-                // 写入任务还没跑完进程就可能没了 —— 表现为"加了规则但没生效"
-                val ok = prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(old + r)).commit()
+                // 必须写规则库再推送 —— 之前这里写的是旧的 user_rules 键，
+                // 而统一后读的是 rules 键，于是"加了规则却看不见"（静默失效）
+                RuleStore.upsert(r)
+                pushRulesAsync()
+                val ok = true
                 android.util.Log.i("Wurao", "addRule ok=$ok pkg=$addPkg act=${act.key}")
                 android.widget.Toast.makeText(this, "已加规则 ok=$ok：${act.key} $addPkg", 1).show()
             } else {
