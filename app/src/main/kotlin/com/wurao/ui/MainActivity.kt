@@ -114,6 +114,22 @@ class MainActivity : ComponentActivity() {
         }
         // 风险级开关直达：--es risk <包名> --es kinds COMPONENT,NET,SDK,SENSOR
         // 验完用 --es risk_clear <包名> 关回去（这些能力默认必须全关）
+        // 往某个 App 的拦截名单里加一个组件：--es add_component <包名> --es component <类名>
+        intent?.getStringExtra("add_component")?.let { pkg ->
+            val comp = intent?.getStringExtra("component")?.trim()
+            if (comp.isNullOrBlank()) {
+                finish()
+                return true
+            }
+            val key = Cfg.componentsKey(pkg)
+            val old = Cfg.decodeList(prefs().getString(key, null)).toMutableSet()
+            old += comp
+            prefs().edit().putString(key, Cfg.encodeList(old)).apply()
+            CfgPush.flush(this)
+            android.util.Log.i("Wurao", "组件拦截[$pkg] 共 ${old.size} 个，新加: $comp")
+            finish()
+            return true
+        }
         intent?.getStringExtra("risk")?.let { pkg ->
             val kinds = Cfg.decodeKinds(intent?.getStringExtra("kinds"))
             prefs().edit().putString(Cfg.riskKey(pkg), Cfg.encodeKinds(kinds)).apply()
