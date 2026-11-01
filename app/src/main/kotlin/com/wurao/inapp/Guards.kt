@@ -97,7 +97,7 @@ object Guards {
      * 刻意**不** hook Socket 读写层：那会让每次网络读写都变成一次规则匹配（架构里明确不做）。
      */
     private fun installNet(base: XposedInterface, pkg: String, extra: List<String>) {
-        val hosts = (Seed.adHosts + extra).distinct()
+        val hosts = (Seed.adHosts + extra).map { com.wurao.core.HostMatcher.normalize(it) }.toHashSet()
         if (hosts.isEmpty()) return
         val m = HookKit.findMethod(InetAddress::class.java, "getByName", String::class.java) ?: run {
             Log.w("DNS 拦截：找不到 getByName")
@@ -105,7 +105,7 @@ object Guards {
         }
         base.hookSafe(m, "wurao_block_net") { chain ->
             val host = chain.getArgs().firstOrNull() as? String
-            if (host != null && isAdHost(host, hosts)) {
+            if (com.wurao.core.HostMatcher.matches(host, hosts)) {
                 Log.i("拦域名: $host")
                 HitLog.recordRaw(
                     pkg = pkg,
@@ -113,9 +113,9 @@ object Guards {
                     note = "不让广告联网",
                     act = Act.BLOCK,
                     domain = Domain.HOST,
-                    target = host,
+                    target = host ?: "",
                 )
-                Report.hitRaw(pkg, "host:$host", "不让广告联网", Act.BLOCK, Domain.HOST, host)
+                Report.hitRaw(pkg, "host:$host", "不让广告联网", Act.BLOCK, Domain.HOST, host ?: "")
                 // 不能再调 getByName（会递归回自己），直接按字节构造
                 return@hookSafe runCatching {
                     InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
@@ -126,11 +126,6 @@ object Guards {
         Log.i("DNS 拦截已装配（${hosts.size} 个域名）: $pkg")
     }
 
-    /** 后缀匹配：`a.b.example.com` 命中 `example.com`。 */
-    private fun isAdHost(host: String, hosts: List<String>): Boolean {
-        val h = host.lowercase().trimEnd('.')
-        return hosts.any { h == it || h.endsWith(".$it") }
-    }
 
     // ---------------- ③ 让广告 SDK 起不来 ----------------
 

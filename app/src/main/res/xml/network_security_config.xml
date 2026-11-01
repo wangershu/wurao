@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 只对 localhost 放开明文 HTTP：方便把电脑上的规则文件通过 adb 端口转发喂进来
+     （有些订阅源手机访问不到，只能在电脑上下载后本地导入）。
+     不对任意站点放开明文 —— 订阅本身走 https。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

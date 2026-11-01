@@ -259,6 +259,17 @@ class MainActivity : ComponentActivity() {
      * - 只 replace 订阅那一份，**不动你自己抓的规则**。
      */
     private fun importSource(text: String): String {
+        // 第三种源：内部规则文本（tools/ 里的转换脚本产出的格式）。
+        // 用来把旧规则库的结论搬进来 —— 只搬名单，旧格式的解析代码不进 App。
+        val looksLikeInternal = text.contains("\t") && text.lineSequence().firstOrNull()
+            ?.split("\t")?.getOrNull(1)?.let { Act.fromKey(it.trim()) != null } == true
+        if (looksLikeInternal) {
+            val list = Cfg.decodeRules(text)
+            list.forEach { RuleStore.upsert(it) }
+            pushRules()
+            return "规则文本：读入 ${list.size} 条；库里现在共 ${RuleStore.all().size} 条"
+        }
+
         val looksLikeSub = text.contains("globalGroups") || text.contains("apps")
         val rules: List<Rule>
         val head: String
