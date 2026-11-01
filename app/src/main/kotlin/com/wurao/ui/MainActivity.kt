@@ -177,8 +177,13 @@ class MainActivity : ComponentActivity() {
         // 这里是调试入口，更要守这条 —— 否则"导入大表"直接把模块搞成无响应。
         intent?.getStringExtra("import_file")?.let { path ->
             runInBackground {
-                val body = runCatching { java.io.File(path).readText() }.getOrNull()
-                if (body.isNullOrBlank()) "读不到文件：$path" else importSource(body)
+                // 不以 / 开头就当文件名，读 App 自己的目录（filesDir）——
+                // 硬编码 /data/data/... 在不同机型/多用户下可能不对，而且外部路径往往没权限读
+                val file = if (path.startsWith("/")) java.io.File(path)
+                else java.io.File(filesDir, path)
+                android.util.Log.i("Wurao", "读文件: ${file.absolutePath} 存在=${file.exists()} 可读=${file.canRead()}")
+                val body = runCatching { file.readText() }.getOrNull()
+                if (body.isNullOrBlank()) "读不到文件：${file.absolutePath}" else importSource(body)
             }
             return false
         }
@@ -244,7 +249,13 @@ class MainActivity : ComponentActivity() {
      * **不静默**：跳过了多少、为什么跳过，都要写进报告给你看。
      */
     fun doImport(text: String): String {
-        val looksLikeSub = text.contains("globalGroups") || text.contains("apps")
+        // 认类型的依据必须是"长什么样"，不能是"含不含某个词" ——
+        // 之前写的是 contains("apps")，而域名里常有 apps.xxx.com，
+        // 于是域名表被误判成 GKD 订阅拿去当 JSON5 解析，整片静默报废
+        // （表现就是"导入了但只进了一半"，且不报错）
+        val firstLine = text.lineSequence().map { it.trim() }
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("!") } ?: ""
+        val looksLikeSub = firstLine.startsWith("{") || firstLine.startsWith("[{")
         val rules: List<Rule>
         val head: String
         if (looksLikeSub) {
@@ -290,11 +301,17 @@ class MainActivity : ComponentActivity() {
         if (looksLikeInternal) {
             val list = Cfg.decodeRules(text)
             list.forEach { RuleStore.upsert(it) }
-            pushRules()
+            pushRulesAsync()
             return "规则文本：读入 ${list.size} 条；库里现在共 ${RuleStore.all().size} 条"
         }
 
-        val looksLikeSub = text.contains("globalGroups") || text.contains("apps")
+        // 认类型的依据必须是"长什么样"，不能是"含不含某个词" ——
+        // 之前写的是 contains("apps")，而域名里常有 apps.xxx.com，
+        // 于是域名表被误判成 GKD 订阅拿去当 JSON5 解析，整片静默报废
+        // （表现就是"导入了但只进了一半"，且不报错）
+        val firstLine = text.lineSequence().map { it.trim() }
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("!") } ?: ""
+        val looksLikeSub = firstLine.startsWith("{") || firstLine.startsWith("[{")
         val rules: List<Rule>
         val head: String
         if (looksLikeSub) {
@@ -318,9 +335,10 @@ class MainActivity : ComponentActivity() {
                     note = "广告域名",
                 ))
             }
+            pushRulesAsync()
             head = "域名表：读入 ${h.size} 个域名（已去重）；库里现在共 ${RuleStore.all().size} 条"
         }
-        pushRules()
+        pushRulesAsync()
         return head
     }
 
@@ -367,16 +385,33 @@ class MainActivity : ComponentActivity() {
             Cfg.decodeRules(prefs().getString(Cfg.KEY_SUB_RULES, null))
         if (legacy.isEmpty()) return
         legacy.forEach { RuleStore.upsert(it) }
-        pushRules()
+        pushRulesAsync()
         android.util.Log.i("Wurao", "规则迁移：${legacy.size} 条 -> 统一键")
     }
 
-    /** 规则有任何改动都要调一次：写统一键并推送到 hook 进程。 */
-    private fun pushRules(): Int {
-        val all = RuleStore.all()
-        prefs().edit().putString(Cfg.KEY_RULES, Cfg.encodeRules(all)).apply()
-        CfgPush.flush(this)
-        return all.size
+    /**
+     * 规则有任何改动都要调一次：写统一键并推送到 hook 进程。
+     *
+     * **放后台**：几万条规则时，编码 + 写配置 + 推文件这一串在主线程是好几秒的活，
+     * 实测就是这么 ANR 的（主线程被卡住 5 秒以上）。调用方若要条数，走 [pushRulesAsync]。
+     */
+    private fun pushRulesAsync() {
+        Thread {
+            val all = RuleStore.all()
+            prefs().edit().putString(Cfg.KEY_RULES, Cfg.encodeRules(all)).apply()
+            CfgPush.flush(this)
+        }.start()
+    }
+
+    /** 后台推送，并把"库里现在多少条"交给回调（回主线程）。 */
+    private fun pushRulesAsync(onCount: (Int) -> Unit) {
+        Thread {
+            val all = RuleStore.all()
+            prefs().edit().putString(Cfg.KEY_RULES, Cfg.encodeRules(all)).apply()
+            CfgPush.flush(this)
+            val n = all.size
+            runOnUiThread { onCount(n) }
+        }.start()
     }
 
     /**
@@ -388,7 +423,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun runInBackground(work: () -> String) {
         Thread {
-            val report = runCatching { work() }.getOrDefault("导入失败")
+            val report = runCatching { work() }.onFailure {
+                android.util.Log.w("Wurao", "导入异常: ${it.javaClass.simpleName}: ${it.message}")
+            }.getOrDefault("导入失败")
             runOnUiThread {
                 android.util.Log.i("Wurao", "import: $report")
                 android.widget.Toast.makeText(this, report, 1).show()
@@ -481,7 +518,7 @@ class MainActivity : ComponentActivity() {
             // 停用不等于删除：规则还在库里，随时能恢复。
             RuleStore.setEnabled(ruleId, ruleId !in stopped)
             rows = HitStore.all()
-            pushRules()
+            pushRulesAsync()
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -756,7 +793,7 @@ class MainActivity : ComponentActivity() {
 
         fun save() {
             rules = RuleStore.all()
-            pushRules()
+            pushRulesAsync()
         }
 
         var pkg by remember { mutableStateOf("") }
