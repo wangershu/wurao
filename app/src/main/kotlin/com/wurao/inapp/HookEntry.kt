@@ -89,10 +89,14 @@ class HookEntry : XposedModule() {
 
     /** 读用户自己加的规则（检视层抓的或手写的）。 */
     private fun loadUserRules() {
+        val prefs = runCatching { getRemotePreferences(Cfg.GROUP) }.getOrNull()
+        Log.i("远程偏好 group=${Cfg.GROUP} -> " + (prefs?.all?.keys?.joinToString() ?: "null"))
         val raw = runCatching {
-            getRemotePreferences(Cfg.GROUP)?.getString(Cfg.KEY_USER_RULES, null)
+            prefs?.getString(Cfg.KEY_USER_RULES, null)
         }.getOrNull() ?: return
-        Executor.setUserRules(Cfg.decodeRules(raw))
+        val list = Cfg.decodeRules(raw)
+        Executor.setUserRules(list)
+        Log.i("读到用户规则 ${list.size} 条")
     }
 
     /** 读界面上停用的规则（排错时的出口）。 */

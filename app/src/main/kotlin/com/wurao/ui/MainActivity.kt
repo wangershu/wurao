@@ -52,10 +52,36 @@ class MainActivity : ComponentActivity() {
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
 
-        // 调试直达：adb shell am start ... --es add_pkg <包名> --es add_sel <选择器> [--es add_act hide]
+        // 调试直达：adb shell am start ... --es add_pkg <包名> --es add_sel_b64 <base64选择器> [--es add_act hide]
         // 省得每次验证都要在界面上点半天（上一版也留了这类入口）。
+        if (handleDirect(intent)) {
+            finish()
+            return
+        }
+
+        setContent { WuraoApp() }
+    }
+
+    /**
+     * 界面已经开着时，am start 走的是 onNewIntent 而不是 onCreate ——
+     * 只写在 onCreate 里的话，调试直达会"看起来没反应"。
+     */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (handleDirect(intent)) finish()
+    }
+
+    /** @return true 表示这条 intent 是调试直达，已经处理完（调用方应 finish） */
+    private fun handleDirect(intent: android.content.Intent?): Boolean {
         val addPkg = intent?.getStringExtra("add_pkg")
+        // 选择器里有 `<<`，直接用 --es 传会被 adb shell 当成 here-document 吃掉
+        // （报错：here document unclosed），所以额外支持 base64 形式
         val addSel = intent?.getStringExtra("add_sel")
+            ?: intent?.getStringExtra("add_sel_b64")?.let {
+                runCatching {
+                    String(android.util.Base64.decode(it, android.util.Base64.DEFAULT))
+                }.getOrNull()
+            }
         if (!addPkg.isNullOrBlank() && !addSel.isNullOrBlank()) {
             val actKey = intent?.getStringExtra("add_act") ?: Act.HIDE.key
             val act = Act.fromKey(actKey) ?: Act.HIDE
@@ -71,16 +97,18 @@ class MainActivity : ComponentActivity() {
             )
             val old = Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))
             if (r.validate().isEmpty()) {
-                prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(old + r)).apply()
-                android.widget.Toast.makeText(this, "已加规则：${act.key} $addPkg", 0).show()
+                // 用 commit 不用 apply：apply 是异步的，紧接着 finish() 的话
+                // 写入任务还没跑完进程就可能没了 —— 表现为"加了规则但没生效"
+                val ok = prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(old + r)).commit()
+                android.util.Log.i("Wurao", "addRule ok=$ok pkg=$addPkg act=${act.key}")
+                android.widget.Toast.makeText(this, "已加规则 ok=$ok：${act.key} $addPkg", 1).show()
             } else {
-                android.widget.Toast.makeText(this, "规则不合法：${r.validate().joinToString()}", 0).show()
+                android.util.Log.w("Wurao", "addRule 非法：${r.validate().joinToString()}")
+                android.widget.Toast.makeText(this, "规则不合法：${r.validate().joinToString()}", 1).show()
             }
-            finish()
-            return
+            return true
         }
-
-        setContent { WuraoApp() }
+        return false
     }
 
     private fun prefs() = getSharedPreferences(Cfg.GROUP, MODE_PRIVATE)

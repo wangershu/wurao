@@ -1,5 +1,24 @@
 # NOW.md —— 当前进度（最新在前）
 
+## 2026-11-01 · 配置通道不通：UI 写的配置 hook 侧读不到（**当前最大的未解决项**）
+
+现象：界面加了规则，配置文件 `wurao_cfg.xml` 确实写进去了，但美团底栏视频入口没被隐藏。
+诊断日志（目标进程打出）：
+```
+tick: pkg=com.sankuai.meituan 规则=2          ← 只有内置的 2 条，用户规则没进来
+远程偏好 group=wurao_cfg ->                    ← 键是空的
+```
+结论：UI 侧用普通 SharedPreferences 写、hook 侧用 `getRemotePreferences` 读，这条通道**读不到内容**。
+
+修复方向（下一轮做）：改用 **ContentProvider** —— 命中记录回传用的就是它，已经真机验证过能跨进程工作
+（`adb shell content insert/query` 都通）。把配置也走同一条路，风险最低。
+
+顺带修好的两个坑：
+1. 调试直达走 `onNewIntent` 而不是 `onCreate`（界面已开着时 am start 不会重走 onCreate）
+2. `apply()` 是异步的，紧接着 finish() 会来不及落盘 → 改 `commit()`；
+   另外选择器里的 `<<` 会被 adb shell 当 here-document 吃掉 → 改用 base64 传
+
+---
 ## 2026-11-01 · S7 进行中：规则生成与用户规则通道已通（131 条单测全绿）
 
 **已完成**

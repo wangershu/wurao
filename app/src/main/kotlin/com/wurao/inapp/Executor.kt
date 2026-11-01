@@ -74,6 +74,7 @@ object Executor {
 
         // ① 进程闸 + ② App 闸：先把没资格的规则筛掉，再谈匹配
         val rules = activeRules(pkg)
+        Log.d("tick: pkg=$pkg 规则=${rules.size} 页=${pacing.currentPage}")
         if (rules.isEmpty()) return null
 
         val adapter = ViewAdapter(pkg)
