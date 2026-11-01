@@ -318,7 +318,13 @@ GDT 那几个 Activity 就是标准的横屏/竖屏/激励视频/插屏广告页
 | 开屏广告 | `命中[com.netease.cloudmusic] 开屏广告的跳过按钮（要求可见）` |
 | 订阅导入 | AIsouler 1.1MB：采用 3127/3189（98%）；AdClose 17305 行：全进 17304（已去重） |
 | 送达 | `配置就位[com.sankuai.meituan]: 规则=28548 订阅域名=25016` |
-| 抓屏 | `抓到 172 个控件 (com.sankuai.meituan)` |
+| 抓屏 | `抓到 172 个控件 (com.sankuai.meituan)`；改成**在当前界面画框点选**后，
+窗口列表能看到 `com.wurao.app` 的 `ACCESSIBILITY_OVERLAY` 全屏窗口（框确实画出来了）。
+注意：无障碍 overlay **不参与截图**，所以截图里看不到框，别据此误判 |
+| 懂车帝 | hook 生效（`配置就位[com.ss.android.auto]`、tick 在 SplashActivity），
+DNS 装配 15292 个域名 / 493 KB。但它停在登录页（未登录看不到信息流），
+**没抓到真实拦截事件**；另外按类名挖不到候选（字节系重定位），与调研一致 |
+| 开销 | `开销: tick 耗时 38~45ms`（2 万条规则，页面切换后跑两次） |
 | 摇一摇 | `拦摇一摇注册: com.sankuai.meituan`（四件套里唯一抓到真实事件的） |
 | 命中记录 | 看板能看到记录与规则文本，"停用"按钮可用 |
 | 常驻内存 | 15716 个域名经 DomainSet 扁平存储占 **510 KB**（同样数据用 HashSet 约 1.9MB） |
