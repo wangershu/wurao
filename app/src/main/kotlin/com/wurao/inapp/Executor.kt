@@ -29,6 +29,19 @@ object Executor {
     /** 例外名单：全局规则在这个包上被关掉（S6 由界面写入）。 */
     private val excluded = HashSet<String>()
 
+    /** 被停用的规则 id —— 排错时从命中记录点"停用"写进来。停用不等于删除。 */
+    private val stopped = HashSet<String>()
+
+    fun setStopped(ids: Collection<String>) {
+        stopped.clear()
+        stopped.addAll(ids)
+    }
+
+    fun setExcluded(pkgs: Collection<String>) {
+        excluded.clear()
+        excluded.addAll(pkgs)
+    }
+
     fun setPaused(v: Boolean) = pacing.setPaused(v)
 
     fun exclude(pkg: String) {
@@ -75,6 +88,7 @@ object Executor {
                 // 这条日志由**目标进程**打出 —— 进程内生效的证据就是它（PID 不是模块进程）
                 Log.i("命中[$pkg] $note <- ${rule.target}")
                 HitLog.record(rule, pkg, pacing.currentPage, now)
+                Report.hit(rule, pkg, pacing.currentPage)
                 return note
             }
         }
@@ -87,7 +101,9 @@ object Executor {
      * 顺序按「用户自抓 > 订阅 > 内置」（自定规则是亲眼看到才建的，最可信）。
      */
     private fun activeRules(pkg: String): List<Rule> =
-        Builtin.rules().filter { it.enabled && it.enabledFor(pkg) && !excluded.contains(pkg) }
+        Builtin.rules().filter {
+            it.enabled && it.enabledFor(pkg) && !excluded.contains(pkg) && it.id !in stopped
+        }
 
     /** 排障用：当前节奏状态。 */
     fun debugState(): String = "page=${pacing.currentPage} paused=${pacing.isPaused}"

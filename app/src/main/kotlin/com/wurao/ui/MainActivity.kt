@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
+        HitProvider.restore(this)
         setContent { WuraoApp() }
     }
 
@@ -87,25 +89,58 @@ class MainActivity : ComponentActivity() {
 
     // ---------------- 看板 ----------------
 
+    /**
+     * 看板 = **排错主入口**：这里列出的每一行都是"某条规则真的动过手"，
+     * 而你要的正是"功能不正常时，知道该停哪一条" —— 所以每行直接给停用按钮。
+     */
     @Composable
     private fun BoardScreen() {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("看板", fontWeight = FontWeight.Bold)
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("框架状态：以日志为准")
-                    Text(
-                        "模块在目标 App 里生效时，目标进程会打出「已装配」日志。\n" +
-                            "注意走的不是 Wurao 这个 tag，而是 LSPosedFramework。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+        var rows by remember { mutableStateOf(HitStore.all()) }
+        var stopped by remember {
+            mutableStateOf(Cfg.decodeList(prefs().getString(Cfg.KEY_STOPPED, null)).toSet())
+        }
+
+        fun toggleStop(ruleId: String) {
+            val next = if (ruleId in stopped) stopped - ruleId else stopped + ruleId
+            stopped = next
+            prefs().edit().putString(Cfg.KEY_STOPPED, Cfg.encodeList(next)).apply()
+        }
+
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("命中记录", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Button(onClick = { rows = HitStore.all() }) { Text("刷新") }
             }
-            Text("命中记录（待接入）", fontWeight = FontWeight.Bold)
             Text(
-                "记录逻辑已经写好并按规则聚合，但从目标进程回传到界面还差一个通道，下一步接。",
+                "同一条规则反复命中只占一行（只涨次数），所以开一天 App 也不会刷屏。",
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (rows.isEmpty()) {
+                Text("还没有记录。目标 App 里真的动手之后，记录会从它的进程送回来。")
+            } else {
+                LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(rows) { r ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Row(Modifier.padding(12.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(r.pkg, style = MaterialTheme.typography.bodySmall)
+                                    Text(r.describe())
+                                    Text(
+                                        r.target,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    if (r.ruleId in stopped) {
+                                        Text("已停用", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Button(onClick = { toggleStop(r.ruleId) }) {
+                                    Text(if (r.ruleId in stopped) "恢复" else "停用")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -17,6 +17,13 @@ object Cfg {
     /** 全局暂停（一键全停）。 */
     const val KEY_PAUSED = "paused"
 
+    /**
+     * 被停用的规则 id（逗号分隔）—— **排错的出口**。
+     * 你在命中记录里点一下"停用"，这条规则就不再执行，但**不会被删除**
+     * （删了就找不回来了）。
+     */
+    const val KEY_STOPPED = "stopped"
+
     /** 某个应用被排除（全局规则对它不生效）。 */
     fun excludeKey(pkg: String): String = "exclude:$pkg"
 

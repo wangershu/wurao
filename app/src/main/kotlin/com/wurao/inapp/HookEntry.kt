@@ -1,6 +1,7 @@
 package com.wurao.inapp
 
 import android.app.Activity
+import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import com.wurao.core.Cfg
@@ -53,8 +54,22 @@ class HookEntry : XposedModule() {
             }.onFailure { Log.w("onResume 回调出错: ${it.message}") }
             result
         }
-        // 界面上开的风险级能力（UI 进程写、这里读）。读不到就维持全关 —— 安全第一。
+        // 命中记录要送回界面，先拿到 Context。
+        // 挂 Application.onCreate 而不是 Activity.onCreate —— 开屏广告发生在任何 Activity 之前。
+        HookKit.findMethod(Application::class.java, "onCreate")?.let { m ->
+            hookSafe(m, "wurao_ctx") { chain ->
+                val result = chain.proceed()
+                runCatching {
+                    (chain.getThisObject() as? Application)?.let { Report.attach(it) }
+                }
+                result
+            }
+        }
+
+        // 界面上开的风险级能力、停用的规则（UI 进程写、这里读）。
+        // 读不到就维持全关/不停用 —— 安全第一。
         loadRiskConfig(pkg)
+        loadStoppedRules()
 
         // L0 三件套（组件 / DNS / SDK）：默认全关，按 App 在界面里开。
         // 装不装得上看 RiskGate —— 没开的应用一个 hook 都不装，零开销。
@@ -69,6 +84,14 @@ class HookEntry : XposedModule() {
             .onFailure { Log.w("L0 装配失败: ${it.message}") }
 
         Log.i("已装配: $pkg")
+    }
+
+    /** 读界面上停用的规则（排错时的出口）。 */
+    private fun loadStoppedRules() {
+        val raw = runCatching {
+            getRemotePreferences(Cfg.GROUP)?.getString(Cfg.KEY_STOPPED, null)
+        }.getOrNull() ?: return
+        Executor.setStopped(Cfg.decodeList(raw))
     }
 
     /**

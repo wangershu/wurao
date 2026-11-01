@@ -28,5 +28,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 命中记录的反向通道：目标进程 insert、界面 query。
+             exported 是必须的（要让别的进程写），代价是没有权限保护 ——
+             自用模块的取舍：换来的是任何被 hook 的进程都能把记录送回来。 -->
+        <provider
+            android:name="com.wurao.ui.HitProvider"
+            android:authorities="com.wurao.app.hits"
+            android:exported="true" />
     </application>
 </manifest>

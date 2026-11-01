@@ -70,6 +70,7 @@ object Guards {
                                 domain = Domain.COMPONENT,
                                 target = cn.className,
                             )
+                            Report.hitRaw(pkg, "component:${cn.className}", "拦掉广告页面", Act.BLOCK, Domain.COMPONENT, cn.className)
                             break
                         }
                     }
@@ -107,6 +108,7 @@ object Guards {
                     domain = Domain.HOST,
                     target = host,
                 )
+                Report.hitRaw(pkg, "host:$host", "不让广告联网", Act.BLOCK, Domain.HOST, host)
                 // 不能再调 getByName（会递归回自己），直接按字节构造
                 return@hookSafe runCatching {
                     InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
@@ -150,6 +152,7 @@ object Guards {
                         domain = Domain.SDK,
                         target = "$clsName#$methodName",
                     )
+                    Report.hitRaw(pkg, "sdk:$clsName#$methodName", "去掉广告 SDK", Act.BLOCK, Domain.SDK, "$clsName#$methodName")
                     // 不 proceed = init 从未发生
                     when (m.returnType) {
                         java.lang.Boolean.TYPE -> false
