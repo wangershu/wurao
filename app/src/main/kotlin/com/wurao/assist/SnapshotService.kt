@@ -36,6 +36,14 @@ class SnapshotService : AccessibilityService() {
         @Volatile
         var wantCapture: Boolean = false
 
+        /**
+         * 只抓这个包名的窗口。
+         * 不指定的话，第一个到达的窗口事件常常是状态栏（com.android.systemui），
+         * 结果抓回来的根本不是你要的那个 App —— 实测就是这么抓错的。
+         */
+        @Volatile
+        var wantPkg: String? = null
+
         /** 最近抓到的那屏。 */
         @Volatile
         var lastSnapshot: List<Pick>? = null
@@ -64,8 +72,12 @@ class SnapshotService : AccessibilityService() {
         if (t != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             t != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) return
+        val pkg = event?.packageName?.toString()
+        // 不是目标 App 就不消费标记，继续等它出现
+        if (wantPkg != null && pkg != wantPkg) return
         wantCapture = false
-        lastPkg = event?.packageName?.toString()
+        wantPkg = null
+        lastPkg = pkg
         lastSnapshot = captureNow()
         android.util.Log.i("Wurao", "抓到 ${lastSnapshot?.size ?: 0} 个控件 ($lastPkg)")
     }

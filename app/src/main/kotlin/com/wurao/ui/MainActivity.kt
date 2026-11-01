@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
         // 抓屏：置上标记，然后切到目标 App（adb 点不了按钮，只能这样触发）
         intent?.getStringExtra("capture")?.let {
             val ok = SnapshotService.active
+            SnapshotService.wantPkg = intent?.getStringExtra("capture_pkg")
             SnapshotService.wantCapture = true
             android.util.Log.i("Wurao", "抓屏：服务=${if (ok) "已连接" else "未连接"}，已置标记，请切到目标 App")
             finish()
@@ -542,8 +543,9 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
+                            SnapshotService.wantPkg = pkg
                             SnapshotService.wantCapture = true
-                            scanNote = "已就绪：请切到这个 App，再切回来点「看看抓到没」"
+                            scanNote = "已就绪：请切到 $pkg，再切回来点「看看抓到没」"
                         }) { Text("抓一屏") }
                         Button(onClick = {
                             picks = SnapshotService.lastSnapshot ?: emptyList()
