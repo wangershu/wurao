@@ -37,12 +37,22 @@ object Executor {
     private val remoteRules = ArrayList<Rule>()
 
     /**
+     * 规则索引（按包名 + 叶子特征）。**在 setRules 时建好**：
+     * 每次 tick 重建等于把几千条规则的选择器重解析一遍，那就白优化了。
+     */
+    private var plans: Map<String, com.wurao.core.analyze.RuleIndex.Plan> = emptyMap()
+    private var globalPlan = com.wurao.core.analyze.RuleIndex.Plan(emptyList())
+
+    /**
      * 排序：自己抓的 > 订阅/自动分析 > 内置。
      * 你是亲眼看到那个东西才抓的，比订阅来的更可信，所以先试它。
      */
     fun setRules(list: List<Rule>) {
+        val sorted = list.sortedBy { priorityOf(it) }
         remoteRules.clear()
-        remoteRules.addAll(list.sortedBy { priorityOf(it) })
+        remoteRules.addAll(sorted)
+        plans = com.wurao.core.analyze.RuleIndex.build(sorted)
+        globalPlan = com.wurao.core.analyze.RuleIndex.globalPlan(sorted)
     }
 
     fun setStopped(ids: Collection<String>) {
@@ -85,9 +95,25 @@ object Executor {
         val adapter = ViewAdapter(pkg)
         val now = System.currentTimeMillis()
 
-        for (rule in rules) {
-            if (rule.domain != com.wurao.core.model.Domain.NODE) continue   // ③ 域闸：本阶段只跑控件域
-            if (!pacing.allow(rule, now)) continue
+        val nodeRules = rules.filter {
+            it.domain == com.wurao.core.model.Domain.NODE && pacing.allow(it, now)
+        }
+        if (nodeRules.isEmpty()) return null
+
+        // 索引筛一遍：一条规则若命中，它的叶子必然是树上某个节点，
+        // 所以「按叶子特征挑出来的候选」不会漏 —— 但能把绝大多数无关规则挡掉，
+        // 省下的就是「每条规则各自遍历整棵树」的那份开销（几千条时非常可观）。
+        val toTry = HashSet<String>()
+        val pkgPlan = plans[pkg]
+        walk(root, adapter) { node ->
+            val keys = com.wurao.core.analyze.RuleIndex.keysOf(adapter, node)
+            if (keys.isEmpty()) return@walk
+            pkgPlan?.forKeys(keys)?.forEach { toTry.add(it.rule.id) }
+            globalPlan.forKeys(keys).forEach { toTry.add(it.rule.id) }
+        }
+
+        for (rule in nodeRules) {
+            if (rule.id !in toTry) continue
 
             val selector = selectorCache.getOrPut(rule.target) {
                 runCatching { SelectorParser(rule.target).parse() }.getOrNull() ?: return null
@@ -107,6 +133,20 @@ object Executor {
             }
         }
         return null
+    }
+
+    /** 遍历整棵树（显式栈，避免深树递归）。 */
+    private fun <T> walk(root: T, adapter: com.wurao.core.selector.NodeAdapter<T>, visit: (T) -> Unit) {
+        val stack = ArrayList<T>()
+        stack.add(root)
+        while (stack.isNotEmpty()) {
+            val node = stack.removeAt(stack.lastIndex)
+            runCatching { visit(node) }
+            val n = runCatching { adapter.childCount(node) }.getOrDefault(0)
+            for (i in n - 1 downTo 0) {
+                runCatching { adapter.child(node, i) }?.getOrNull()?.let(stack::add)
+            }
+        }
     }
 
     /**
