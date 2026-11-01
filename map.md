@@ -39,6 +39,15 @@
 | 系统 | Android 16（API 36）/ HyperOS V816 |
 | 框架 | LSPosed 2.2.1（api 102），作用域：全部应用 |
 
+## 构建环境坑（本机特有，别踩第二次）
+
+| 坑 | 解法 |
+|---|---|
+| 沙箱终端给新文件打 `com.apple.provenance`，Gradle 删不掉旧产物，表现为「报错但看不到编译错误」 | 一律走 `./build.sh`（清 xattr + 关 problems-report + 关 Kotlin 增量） |
+| SDK 路径 | `local.properties` 已配 `sdk.dir=/Users/flynnq/Library/Android/sdk`（**不入库**，换机需重建） |
+| 本机 build-tools **36.0.0 那份是残缺的**，AGP 默认会去装它然后失败 | `app/build.gradle.kts` 显式 `buildToolsVersion = "37.0.0"` |
+| Compose 插件在 classpath 没有 compose runtime 时会报 `noRuntimeOnClasspathError` | S0–S4 不装 kotlin-compose 插件，S5 做 UI 时再装 |
+
 ## 不可越过
 
 - 旧仓库一律只读，**不删、不改、不提交**。

@@ -1,2 +1,7 @@
 ref/
 *.apk
+local.properties
+.gradle/
+build/
+app/build/
+.kotlin/
