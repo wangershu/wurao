@@ -23,11 +23,14 @@ class SnapshotService : AccessibilityService() {
         val node: RuleGen.NodeInfo,
         val container: RuleGen.NodeInfo?,
         val pkg: String?,
+        /** 控件在屏幕上的位置，画框用。 */
+        val bounds: android.graphics.Rect,
     )
 
     companion object {
         @Volatile
-        private var instance: SnapshotService? = null
+        var instance: SnapshotService? = null
+            private set
 
         /** 是否开着：界面上要知道"服务没开"并提示去系统设置里开。 */
         val active: Boolean get() = instance != null
@@ -106,7 +109,9 @@ class SnapshotService : AccessibilityService() {
         if (out.size >= MAX_NODES) return
         // 只收用户看得见的：不可见的控件抓来也没用
         if (n.isVisibleToUser) {
-            out.add(Pick(infoOf(n), parent?.let(::infoOf), pkg))
+            val r = android.graphics.Rect()
+            n.getBoundsInScreen(r)
+            out.add(Pick(infoOf(n), parent?.let(::infoOf), pkg, r))
         }
         for (i in 0 until n.childCount) {
             val c = runCatching { n.getChild(i) }.getOrNull() ?: continue

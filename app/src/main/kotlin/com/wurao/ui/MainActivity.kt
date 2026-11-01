@@ -232,6 +232,35 @@ class MainActivity : ComponentActivity() {
             }
             return false
         }
+        // 把抓到的控件框在界面上（需要抓屏服务开着）：--es frames 1
+        intent?.getStringExtra("frames")?.let {
+            val svc = SnapshotService.instance
+            if (svc == null) {
+                android.util.Log.i("Wurao", "frames: 抓屏服务没连上")
+                finish()
+                return true
+            }
+            val picks = SnapshotService.lastSnapshot
+            if (picks.isNullOrEmpty()) {
+                android.util.Log.i("Wurao", "frames: 还没有抓到控件（先抓屏）")
+                finish()
+                return true
+            }
+            val ok = com.wurao.assist.FrameOverlay.show(svc, picks) { pick ->
+                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = Act.HIDE)
+                rules.forEach { RuleStore.upsert(it) }
+                pushRulesAsync()
+                android.widget.Toast.makeText(
+                    svc,
+                    "已保存 ${rules.size} 条：${rules.firstOrNull()?.target}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                com.wurao.assist.FrameOverlay.hide(svc)
+            }
+            android.util.Log.i("Wurao", "frames: 显示 ${picks.size} 个框 ok=$ok")
+            finish()
+            return true
+        }
         intent?.getStringExtra("gen_rule")?.let { idxStr ->
             val idx = idxStr.toIntOrNull() ?: 0
             val pick = SnapshotService.lastSnapshot?.getOrNull(idx)
