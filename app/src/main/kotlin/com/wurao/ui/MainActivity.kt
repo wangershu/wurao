@@ -532,10 +532,8 @@ class MainActivity : ComponentActivity() {
                 Text("抓屏", fontWeight = FontWeight.Bold)
                 if (!SnapshotService.active) {
                     Text(
-                        "抓屏服务没连上。Xposed 读不到别的 App 的界面，这层必须靠无障碍。
-" +
-                            "若设置里已经打开过，请**关掉再打开一次** —— 更新 APK 会让服务失效，" +
-                            "重新开关它才会重新绑定（这点在排查时坑过好几次）。",
+                        "抓屏服务没连上。Xposed 读不到别的 App 的界面，这层必须靠无障碍。" +
+                            "若设置里已打开过，请关掉再打开一次 —— 更新 APK 会让服务失效，重新开关才会重新绑定。",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(onClick = {
