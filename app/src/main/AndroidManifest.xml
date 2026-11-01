@@ -37,5 +37,18 @@
             android:authorities="com.wurao.app.hits"
             android:exported="true" />
 
+
+        <!-- 抓屏（检视层）：Xposed 读不到别的 App 的界面，这层必须靠无障碍。 -->
+        <service
+            android:name="com.wurao.assist.SnapshotService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/snapshot_service_config" />
+        </service>
     </application>
 </manifest>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">无扰</string>
+    <string name="snapshot_desc">抓屏：在「无扰」里点「抓一屏」后切到目标应用，把当前界面的控件摊成清单供你挑选生成规则。只在抓取时读取界面，不做常驻监听。</string>
+</resources>

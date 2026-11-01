@@ -35,9 +35,11 @@ import com.wurao.core.model.Act
 import com.wurao.core.model.Origin
 import com.wurao.core.model.Rule
 import com.wurao.core.model.Scope
+import com.wurao.assist.SnapshotService
 import com.wurao.core.Cfg
 import com.wurao.core.RiskGate
 import com.wurao.core.analyze.AdComponentFinder
+import com.wurao.core.analyze.RuleGen
 
 /**
  * 界面。**信息架构沿用上一版**：底部三个页签（看板 / 应用 / 设置）。
@@ -282,6 +284,16 @@ class MainActivity : ComponentActivity() {
         var candidates by remember { mutableStateOf<List<AdComponentFinder.Candidate>>(emptyList()) }
         var picked by remember { mutableStateOf(Cfg.decodeList(prefs().getString(Cfg.componentsKey(pkg), null)).toSet()) }
         var scanNote by remember { mutableStateOf("") }
+        var picks by remember { mutableStateOf<List<SnapshotService.Pick>>(emptyList()) }
+
+        /** 把抓到的控件变成规则并保存（含降级链）。 */
+        fun generateFrom(pick: SnapshotService.Pick, act: Act) {
+            val rules = RuleGen.rules(pkg, pick.node, pick.container, act = act)
+            val old = Cfg.decodeRules(prefs().getString(Cfg.KEY_USER_RULES, null))
+            prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(old + rules)).apply()
+            CfgPush.flush(this)
+            scanNote = "已生成 ${rules.size} 条（含降级链），第一行：" + rules.first().target
+        }
 
         fun saveKinds(next: Set<RiskGate.Kind>) {
             kinds = next
@@ -319,6 +331,53 @@ class MainActivity : ComponentActivity() {
                             saveKinds(if (on) kinds + kind else kinds - kind)
                         },
                     )
+                }
+            }
+
+            item {
+                Text("抓屏", fontWeight = FontWeight.Bold)
+                if (!SnapshotService.active) {
+                    Text(
+                        "要先在系统设置里开启「无扰」的抓屏服务。Xposed 读不到别的 App 的界面，这层必须靠无障碍。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = {
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }) { Text("去开启") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            SnapshotService.wantCapture = true
+                            scanNote = "已就绪：请切到这个 App，再切回来点「看看抓到没」"
+                        }) { Text("抓一屏") }
+                        Button(onClick = {
+                            picks = SnapshotService.lastSnapshot ?: emptyList()
+                            scanNote = "抓到 ${picks.size} 个控件（${SnapshotService.lastPkg ?: "?"}）"
+                        }) { Text("看看抓到没") }
+                    }
+                }
+                if (scanNote.isNotEmpty()) Text(scanNote, style = MaterialTheme.typography.bodySmall)
+            }
+
+            items(picks.take(60)) { pick ->
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(10.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            val title = pick.node.text ?: pick.node.desc ?: pick.node.vid
+                                ?: pick.node.className.substringAfterLast('.')
+                            Text(title, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                pick.node.className.substringAfterLast('.') +
+                                    (pick.node.vid?.let { " · id=$it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            pick.container?.vid?.let { Text("容器 id=$it", style = MaterialTheme.typography.bodySmall) }
+                        }
+                        Column {
+                            Button(onClick = { generateFrom(pick, Act.HIDE) }) { Text("藏") }
+                            Button(onClick = { generateFrom(pick, Act.CLICK) }) { Text("点") }
+                        }
+                    }
                 }
             }
 
