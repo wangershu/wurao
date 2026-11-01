@@ -1,6 +1,32 @@
 # NOW.md —— 当前进度（最新在前）
 
-## 2026-11-01 · S2/S3/S4 完成，APK 已装手机，**等真机激活**
+## 2026-11-01 · 真机验证通过：模块在美团进程内跑起来了（80 条单测全绿）
+
+**真机证据（美团进程 PID 21950，不是模块进程）**
+```
+LSPosedFramework: (com.sankuai.meituan)[com.wurao.app,Wurao,...] 无扰已加载: framework=LSPosed ver=2.2.1 api=102
+LSPosedFramework: (com.sankuai.meituan)[com.wurao.app,Wurao,...] 已装配: com.sankuai.meituan
+```
+→ libxposed api 102 的装配链路在 Android 16 上跑通（S2 最大的未知已消除）。
+
+**真实界面验证（adb uiautomator dump 美团首页，168 节点，已成为测试资源）**
+纠正了"隐藏视频入口"这条需求的两个想当然写法：
+1. 底栏 tab 的文字在 **`content-desc`** 而不是 `text`（tab 是 `android.view.View`，不是 TextView）
+   → 按 `[text="视频"]` 写规则根本找不到底栏；
+2. 首页内容区**也有**一个 `text="视频"` 的功能入口 → 只按文本匹配会误伤它。
+
+**因此隐藏视频入口的正确规则是：**
+```
+[vid="bottom_tab_block"] << [desc="视频"]     // 先锁底栏容器，再找 desc
+```
+（`bottom_tab_block` 是底栏容器的资源 id，实测存在。）
+
+**还没验到的**：真实广告命中（美团这次启动没出开屏广告，日志里只有加载与装配）。
+下次验证：强停后多启几次 / 换个时间点，或等 S6 界面做好后手动触发。
+
+---
+
+## 2026-11-01 · S2/S3/S4 完成，APK 已装手机，**已激活**
 
 **已完成（74 条单测全绿，包 982KB 已 adb install）**
 - **S2** 进程内执行器：libxposed 102 入口 + 三道闸 + View 适配器 + 动作（`ec73bc1`）
