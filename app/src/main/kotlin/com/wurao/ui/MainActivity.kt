@@ -129,6 +129,19 @@ class MainActivity : ComponentActivity() {
             finish()
             return true
         }
+        // 打印作用域与框架信息：判断"某个 App 为什么没生效"先看这个
+        intent?.getStringExtra("scope")?.let {
+            val list = CfgPush.scope()
+            android.util.Log.i("Wurao", "框架: ${CfgPush.framework()}")
+            android.util.Log.i("Wurao", "作用域 ${list.size} 个: " + list.take(30).joinToString(","))
+            android.util.Log.i(
+                "Wurao",
+                "网易云在作用域里吗: ${list.contains("com.netease.cloudmusic")}；" +
+                    "美团: ${list.contains("com.sankuai.meituan")}"
+            )
+            finish()
+            return true
+        }
         intent?.getStringExtra("export")?.let {
             val text = exportText()
             android.util.Log.i("Wurao", "export: ${text.length} 字符 :: " + text.take(160))

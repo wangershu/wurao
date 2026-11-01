@@ -50,6 +50,15 @@ object CfgPush {
         }.onFailure { Log.w(TAG, "绑定框架服务失败: ${it.message}") }
     }
 
+    /** 当前作用域（框架里勾了哪些 App）。不在作用域里的 App 一条 hook 都不会装。 */
+    fun scope(): List<String> = runCatching { service?.getScope() ?: emptyList() }.getOrDefault(emptyList())
+
+    /** 框架名与版本，排障时用来确认模块确实被加载了。 */
+    fun framework(): String = runCatching {
+        val s = service ?: return@runCatching "未连接"
+        "${s.frameworkName} ${s.frameworkVersion}"
+    }.getOrDefault("未连接")
+
     /** 把本地配置整体写进远程文件。配置有任何改动都要调一次。 */
     fun flush(ctx: Context) {
         val s = service ?: run {
