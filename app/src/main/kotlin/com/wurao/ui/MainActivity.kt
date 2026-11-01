@@ -112,6 +112,23 @@ class MainActivity : ComponentActivity() {
             finish()
             return true
         }
+        // 风险级开关直达：--es risk <包名> --es kinds COMPONENT,NET,SDK,SENSOR
+        // 验完用 --es risk_clear <包名> 关回去（这些能力默认必须全关）
+        intent?.getStringExtra("risk")?.let { pkg ->
+            val kinds = Cfg.decodeKinds(intent?.getStringExtra("kinds"))
+            prefs().edit().putString(Cfg.riskKey(pkg), Cfg.encodeKinds(kinds)).apply()
+            CfgPush.flush(this)
+            android.util.Log.i("Wurao", "风险级[$pkg] = ${Cfg.encodeKinds(kinds)}")
+            finish()
+            return true
+        }
+        intent?.getStringExtra("risk_clear")?.let { pkg ->
+            prefs().edit().remove(Cfg.riskKey(pkg)).apply()
+            CfgPush.flush(this)
+            android.util.Log.i("Wurao", "风险级[$pkg] 已清空")
+            finish()
+            return true
+        }
         intent?.getStringExtra("export")?.let {
             val text = exportText()
             android.util.Log.i("Wurao", "export: ${text.length} 字符 :: " + text.take(160))

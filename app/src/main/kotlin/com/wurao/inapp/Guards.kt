@@ -145,9 +145,16 @@ object Guards {
         for ((clsName, methodName) in Seed.adSdkInits) {
             val cls = runCatching { cl.loadClass(clsName) }.getOrNull()
             // 这个 App 没接这个 SDK 是正常情况，不是错误
-            if (cls == null) continue
+            if (cls == null) {
+                Log.d("SDK 拦截: 找不到类 $clsName")
+                continue
+            }
             val methods = HookKit.findAll(cls, methodName)
-            if (methods.isEmpty()) continue
+            if (methods.isEmpty()) {
+                Log.d("SDK 拦截: $clsName 里没有 $methodName（有 ${cls.declaredMethods.size} 个方法）")
+                continue
+            }
+            Log.d("SDK 拦截: 装配 $clsName#$methodName（${methods.size} 个重载）")
             methods.forEachIndexed { i, m ->
                 base.hookSafe(m, "wurao_block_sdk_${clsName.hashCode()}_$i") { chain ->
                     Log.i("拦 SDK 初始化: $clsName#$methodName")
