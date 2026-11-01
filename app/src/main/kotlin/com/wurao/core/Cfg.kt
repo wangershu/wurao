@@ -17,6 +17,12 @@ object Cfg {
 
     const val GROUP = "wurao_cfg"
 
+    /**
+     * 送进 hook 进程的那个远程文件名。
+     * 用文件而不是远程偏好：偏好在目标进程是"进程启动那一刻的快照"，会停在历史时点。
+     */
+    const val CFG_FILE = "cfg.json"
+
     /** 风险级开关：`risk:<包名>` → 逗号分隔的能力名，如 "COMPONENT,NET"。没这个键 = 全关。 */
     fun riskKey(pkg: String): String = "risk:$pkg"
 

@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
+        // 绑上框架服务后会把本地配置推进 hook 进程；之后每次改动也会推
+        CfgPush.bind(this)
 
         // 调试直达：adb shell am start ... --es add_pkg <包名> --es add_sel_b64 <base64选择器> [--es add_act hide]
         // 省得每次验证都要在界面上点半天（上一版也留了这类入口）。
@@ -380,6 +382,7 @@ class MainActivity : ComponentActivity() {
         fun save(list: List<Rule>) {
             rules = list
             prefs().edit().putString(Cfg.KEY_USER_RULES, Cfg.encodeRules(list)).apply()
+            CfgPush.flush(this)
         }
 
         var pkg by remember { mutableStateOf("") }

@@ -54,73 +54,56 @@ class HookEntry : XposedModule() {
             }.onFailure { Log.w("onResume 回调出错: ${it.message}") }
             result
         }
-        // 命中记录要送回界面，先拿到 Context。
-        // 挂 Application.onCreate 而不是 Activity.onCreate —— 开屏广告发生在任何 Activity 之前。
-        HookKit.findMethod(Application::class.java, "onCreate")?.let { m ->
-            hookSafe(m, "wurao_ctx") { chain ->
+        // 命中记录要送回界面、读界面写的配置，都需要 Context。
+        // 挂 Application.onCreate 而不是 Activity.onCreate —— 开屏广告发生在任何 Activity 之前，
+        // 而且配置必须在任何页面出现之前就位。
+        HookKit.findMethod(Application::class.java, "onCreate")?.let { mm ->
+            hookSafe(mm, "wurao_ctx") { chain ->
                 val result = chain.proceed()
                 runCatching {
-                    (chain.getThisObject() as? Application)?.let { Report.attach(it) }
-                }
+                    val app = chain.getThisObject() as? Application ?: return@runCatching
+                    // 命中记录回传需要 Context（写文件那条路）
+                    Report.attach(app)
+                }.onFailure { Log.w("初始化失败: ${it.message}") }
                 result
             }
         }
 
-        // 界面上开的风险级能力、停用的规则（UI 进程写、这里读）。
-        // 读不到就维持全关/不停用 —— 安全第一。
-        loadRiskConfig(pkg)
-        loadStoppedRules()
-        loadUserRules()
-
-        // L0 三件套（组件 / DNS / SDK）：默认全关，按 App 在界面里开。
-        // 装不装得上看 RiskGate —— 没开的应用一个 hook 都不装，零开销。
-        // 界面上勾选的自动分析候选（UI 写、这里读）
-        val extra = runCatching {
-            getRemotePreferences(Cfg.GROUP)
-                ?.getString(Cfg.componentsKey(pkg), null)
-                ?.let { Cfg.decodeList(it) }
-        }.getOrNull() ?: emptyList()
-
-        runCatching { Guards.install(this, pkg, param.classLoader ?: javaClass.classLoader, extra) }
-            .onFailure { Log.w("L0 装配失败: ${it.message}") }
+        // 配置走远程文件，不需要 Context，这里就能读
+        runCatching { loadConfig(pkg, param.classLoader ?: javaClass.classLoader) }
+            .onFailure { Log.w("读配置失败: ${it.message}") }
 
         Log.i("已装配: $pkg")
     }
 
-    /** 读用户自己加的规则（检视层抓的或手写的）。 */
-    private fun loadUserRules() {
-        val prefs = runCatching { getRemotePreferences(Cfg.GROUP) }.getOrNull()
-        Log.i("远程偏好 group=${Cfg.GROUP} -> " + (prefs?.all?.keys?.joinToString() ?: "null"))
-        val raw = runCatching {
-            prefs?.getString(Cfg.KEY_USER_RULES, null)
-        }.getOrNull() ?: return
-        val list = Cfg.decodeRules(raw)
-        Executor.setUserRules(list)
-        Log.i("读到用户规则 ${list.size} 条")
-    }
-
-    /** 读界面上停用的规则（排错时的出口）。 */
-    private fun loadStoppedRules() {
-        val raw = runCatching {
-            getRemotePreferences(Cfg.GROUP)?.getString(Cfg.KEY_STOPPED, null)
-        }.getOrNull() ?: return
-        Executor.setStopped(Cfg.decodeList(raw))
-    }
-
     /**
-     * 读界面上配置的开关。
+     * 读界面写的所有配置，并按配置装配 L0。
      *
-     * 拿不到偏好（没配过 / 框架不支持）就什么都不开 —— **读失败必须等于全关**，
-     * 反过来的话一个读错就会把风险级能力全打开，那是要出事的。
+     * 必须在拿到 Context 之后（Application.onCreate 里）才调 —— 配置走的是
+     * ContentProvider，没有 Context 就没法 query。
+     *
+     * **读失败一律等于"全关 / 不启用"**：一个读错就把风险级能力全开是要出事的，
+     * 反过来最多是这次没生效。
      */
-    private fun loadRiskConfig(pkg: String) {
-        val prefs = runCatching { getRemotePreferences(Cfg.GROUP) }.getOrNull() ?: return
-        val raw = runCatching { prefs?.getString(Cfg.riskKey(pkg), null) }.getOrNull() ?: return
+    private fun loadConfig(pkg: String, cl: ClassLoader) {
+        val cfg = CfgReader.readAll(this)
+        val userRules = Cfg.decodeRules(cfg[Cfg.KEY_USER_RULES])
+        Executor.setUserRules(userRules)
+        Executor.setStopped(Cfg.decodeList(cfg[Cfg.KEY_STOPPED]))
+
+        val kinds = Cfg.decodeKinds(cfg[Cfg.riskKey(pkg)])
         RiskGate.disableAll(pkg)
-        val kinds = Cfg.decodeKinds(raw)
         kinds.forEach { RiskGate.enable(pkg, it) }
-        if (kinds.isNotEmpty()) Log.i("风险级能力[$pkg]: ${Cfg.encodeKinds(kinds)}")
+
+        val extra = Cfg.decodeList(cfg[Cfg.componentsKey(pkg)])
+        runCatching { Guards.install(this, pkg, cl, extra) }
+            .onFailure { Log.w("L0 装配失败: ${it.message}") }
+
+        Log.i("配置就位[$pkg]: 用户规则=${userRules.size} 风险级=${Cfg.encodeKinds(kinds)} 额外组件=${extra.size}")
     }
+
+
+
 
     /** 排除自己和系统桌面/芯片相关包（原版就这么干，避免无谓开销）。 */
     private fun isTarget(pkg: String): Boolean {

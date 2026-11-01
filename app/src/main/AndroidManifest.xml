@@ -36,5 +36,6 @@
             android:name="com.wurao.ui.HitProvider"
             android:authorities="com.wurao.app.hits"
             android:exported="true" />
+
     </application>
 </manifest>
