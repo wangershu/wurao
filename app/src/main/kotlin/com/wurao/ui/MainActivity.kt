@@ -87,6 +87,12 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDirect(intent: android.content.Intent?): Boolean {
         // 直接进某个应用的详情页，省得每次点半天
+        intent?.getStringExtra("export")?.let {
+            val text = exportText()
+            android.util.Log.i("Wurao", "export: ${text.length} 字符 :: " + text.take(160))
+            finish()
+            return true
+        }
         intent?.getStringExtra("import_sub_b64")?.let {
             val text = runCatching {
                 String(android.util.Base64.decode(it, android.util.Base64.DEFAULT))
@@ -218,6 +224,33 @@ class MainActivity : ComponentActivity() {
         prefs().edit().putString(Cfg.KEY_SUB_RULES, Cfg.encodeRules(rules)).apply()
         CfgPush.flush(this)
         return head
+    }
+
+    /**
+     * 备份成一段文本（所有配置的键值对）。
+     *
+     * 用文本而不是导出文件：不用申请存储权限，你复制出来贴到任何地方都行。
+     */
+    private fun exportText(): String {
+        val o = org.json.JSONObject()
+        prefs().all.forEach { (k, v) -> o.put(k, v?.toString() ?: "") }
+        return o.toString()
+    }
+
+    /** 从备份文本恢复。整份覆盖 —— 所以恢复前会先告诉你里面有多少项。 */
+    private fun restoreText(text: String): String {
+        val o = runCatching { org.json.JSONObject(text) }.getOrElse {
+            return "这段不是有效的备份（解析失败）"
+        }
+        val e = prefs().edit()
+        var n = 0
+        o.keys().forEach { k ->
+            e.putString(k, o.optString(k))
+            n++
+        }
+        e.apply()
+        CfgPush.flush(this)
+        return "已恢复 $n 项配置"
     }
 
     private fun prefs() = getSharedPreferences(Cfg.GROUP, MODE_PRIVATE)
@@ -535,6 +568,7 @@ class MainActivity : ComponentActivity() {
         RiskGate.Kind.COMPONENT -> "广告页还没打开就拦掉，不闪不崩"
         RiskGate.Kind.NET -> "广告域名解析到本地，请求不出门"
         RiskGate.Kind.SDK -> "让广告 SDK 起不来（最抗改版，但可能连累 App）"
+        RiskGate.Kind.SENSOR -> "摇一摇跳不了。注意：计步、摇一摇换歌、重力操控也靠它"
     }
 
     // ---------------- 设置 ----------------
@@ -555,6 +589,8 @@ class MainActivity : ComponentActivity() {
         var tip by remember { mutableStateOf("") }
         var subText by remember { mutableStateOf("") }
         var subReport by remember { mutableStateOf("") }
+        var backupText by remember { mutableStateOf("") }
+        var backupTip by remember { mutableStateOf("") }
 
 
         fun add() {
@@ -661,6 +697,39 @@ class MainActivity : ComponentActivity() {
                             Text(p, style = MaterialTheme.typography.bodySmall)
                         }
                         Button(onClick = { save(rules.filterIndexed { j, _ -> j != i }) }) { Text("删") }
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("备份 / 恢复", fontWeight = FontWeight.Bold)
+                    Text(
+                        "导出成一段文本，复制到任何地方存着；换手机或重装后粘回来即可。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = backupText, onValueChange = { backupText = it },
+                        label = { Text("备份内容") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            backupText = exportText()
+                            val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                            cm?.setPrimaryClip(
+                                android.content.ClipData.newPlainText("wurao", backupText)
+                            )
+                            backupTip = "已导出并复制到剪贴板（${backupText.length} 字符）"
+                        }) { Text("导出") }
+                        Button(onClick = {
+                            backupTip = restoreText(backupText.trim())
+                        }) { Text("恢复") }
+                    }
+                    if (backupTip.isNotEmpty()) {
+                        Text(backupTip, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

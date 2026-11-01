@@ -21,6 +21,9 @@ object RiskGate {
 
         /** 让广告 SDK 起不来（零规则、抗改版，但可能连累 App） */
         SDK("去掉广告 SDK"),
+
+        /** 不让 App 收到加速度/陀螺仪事件，摇一摇广告就跳不了 */
+        SENSOR("去掉摇一摇"),
         ;
 
         companion object {

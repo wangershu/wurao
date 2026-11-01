@@ -35,6 +35,7 @@ object Guards {
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.COMPONENT)) installComponent(base, pkg, extraComponents)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.NET)) installNet(base, pkg, extraHosts)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.SDK)) installSdk(base, pkg, cl)
+        if (RiskGate.isEnabled(pkg, RiskGate.Kind.SENSOR)) installSensor(base, pkg)
     }
 
     // ---------------- ① 拦广告页面 ----------------
@@ -169,5 +170,45 @@ object Guards {
             installed++
         }
         if (installed > 0) Log.i("SDK 拦截已装配（$installed 个 SDK）")
+    }
+
+    /** 摇一摇用的传感器：加速度 + 陀螺仪。 */
+    private val MOTION_SENSORS = setOf(
+        android.hardware.Sensor.TYPE_ACCELEROMETER,
+        android.hardware.Sensor.TYPE_GYROSCOPE,
+    )
+
+    /**
+     * 去摇一摇：不让 App 注册加速度/陀螺仪监听，摇一摇广告自然跳不了。
+     *
+     * **默认关**：加速度传感器不只服务于广告 —— 计步、摇一摇换歌、游戏的重力控制都靠它，
+     * 一刀切会连累正常功能，所以归在风险级，你自己决定哪个 App 值得开。
+     */
+    private fun installSensor(base: XposedInterface, pkg: String) {
+        val methods = HookKit.findAll(android.hardware.SensorManager::class.java, "registerListener")
+        if (methods.isEmpty()) {
+            Log.w("摇一摇：找不到 registerListener")
+            return
+        }
+        methods.forEachIndexed { i, m ->
+            base.hookSafe(m, "wurao_block_sensor_$i") { chain ->
+                val isMotion = chain.getArgs().any {
+                    it is android.hardware.Sensor && it.type in MOTION_SENSORS
+                }
+                if (isMotion) {
+                    Log.i("拦摇一摇注册: $pkg")
+                    HitLog.recordRaw(
+                        pkg = pkg, key = "sensor:motion", note = "去掉摇一摇",
+                        act = Act.BLOCK, domain = Domain.SDK, target = "加速度/陀螺仪",
+                    )
+                    Report.hitRaw(pkg, "sensor:motion", "去掉摇一摇", Act.BLOCK, Domain.SDK, "加速度/陀螺仪")
+                    // 不注册 = App 收不到摇一摇事件
+                    false
+                } else {
+                    chain.proceed()
+                }
+            }
+        }
+        Log.i("摇一摇已装配: $pkg")
     }
 }
