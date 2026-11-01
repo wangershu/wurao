@@ -281,8 +281,8 @@ class MainActivity : ComponentActivity() {
                 (if (r.skipped.isNotEmpty()) "（例如：$reasons）" else "") +
                 "；库里现在共 ${RuleStore.all().size} 条"
         } else {
-            val h = HostList.parse(text)
-            h.hosts.forEach { domain ->
+            val h = com.wurao.core.net.DomainSet.parse(text)
+            h.forEach { domain ->
                 RuleStore.upsert(Rule(
                     domain = com.wurao.core.model.Domain.HOST,
                     target = domain,
@@ -294,8 +294,7 @@ class MainActivity : ComponentActivity() {
                     note = "广告域名",
                 ))
             }
-            head = "域名表：认出 ${h.hosts.size} 个域名" +
-                (if (h.ignoredLines > 0) "，看不懂的行 ${h.ignoredLines} 行" else "")
+            head = "域名表：读入 ${h.size} 个域名（已去重）；库里现在共 ${RuleStore.all().size} 条"
         }
         pushRules()
         return head

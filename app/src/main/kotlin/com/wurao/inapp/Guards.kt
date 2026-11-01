@@ -97,15 +97,17 @@ object Guards {
      * 刻意**不** hook Socket 读写层：那会让每次网络读写都变成一次规则匹配（架构里明确不做）。
      */
     private fun installNet(base: XposedInterface, pkg: String, extra: List<String>) {
-        val hosts = (Seed.adHosts + extra).map { com.wurao.core.HostMatcher.normalize(it) }.toHashSet()
-        if (hosts.isEmpty()) return
+        // 用 DomainSet（反转+扁平+二分）：这张表跑在每个被 hook 的进程里，
+        // 直接 HashSet 接 AdClose 那种两万条的表要 1.9MB，这个只要 0.3MB
+        val hosts = com.wurao.core.net.DomainSet.of(Seed.adHosts + extra)
+        if (hosts.size == 0) return
         val m = HookKit.findMethod(InetAddress::class.java, "getByName", String::class.java) ?: run {
             Log.w("DNS 拦截：找不到 getByName")
             return
         }
         base.hookSafe(m, "wurao_block_net") { chain ->
             val host = chain.getArgs().firstOrNull() as? String
-            if (com.wurao.core.HostMatcher.matches(host, hosts)) {
+            if (hosts.matches(host)) {
                 Log.i("拦域名: $host")
                 HitLog.recordRaw(
                     pkg = pkg,
