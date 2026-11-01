@@ -2,8 +2,11 @@ package com.wurao.inapp
 
 import android.app.Activity
 import android.content.Intent
+import com.wurao.core.HitLog
 import com.wurao.core.RiskGate
 import com.wurao.core.Seed
+import com.wurao.core.model.Act
+import com.wurao.core.model.Domain
 import io.github.libxposed.api.XposedInterface
 import java.net.InetAddress
 // 扩展函数即使同包也要显式 import
@@ -25,7 +28,7 @@ object Guards {
     fun install(base: XposedInterface, pkg: String, cl: ClassLoader) {
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.COMPONENT)) installComponent(base, pkg)
         if (RiskGate.isEnabled(pkg, RiskGate.Kind.NET)) installNet(base, pkg)
-        if (RiskGate.isEnabled(pkg, RiskGate.Kind.SDK)) installSdk(base, cl)
+        if (RiskGate.isEnabled(pkg, RiskGate.Kind.SDK)) installSdk(base, pkg, cl)
     }
 
     // ---------------- ① 拦广告页面 ----------------
@@ -58,6 +61,14 @@ object Guards {
                             runCatching { arg.extras?.clear() }
                             blocked = true
                             Log.i("拦广告页: ${cn.className}")
+                            HitLog.recordRaw(
+                                pkg = pkg,
+                                key = "component:${cn.className}",
+                                note = "拦掉广告页面",
+                                act = Act.BLOCK,
+                                domain = Domain.COMPONENT,
+                                target = cn.className,
+                            )
                             break
                         }
                     }
@@ -87,6 +98,14 @@ object Guards {
             val host = chain.getArgs().firstOrNull() as? String
             if (host != null && isAdHost(host, hosts)) {
                 Log.i("拦域名: $host")
+                HitLog.recordRaw(
+                    pkg = pkg,
+                    key = "host:$host",
+                    note = "不让广告联网",
+                    act = Act.BLOCK,
+                    domain = Domain.HOST,
+                    target = host,
+                )
                 // 不能再调 getByName（会递归回自己），直接按字节构造
                 return@hookSafe runCatching {
                     InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
@@ -111,7 +130,7 @@ object Guards {
      * **这是最抗改版的一招** —— 界面天天变，SDK 的类名几年不变（AdClose 就是靠这个做到零规则）。
      * 代价也正是它属于风险级的原因：SDK 起不来，依赖它的业务逻辑可能跟着瘫。
      */
-    private fun installSdk(base: XposedInterface, cl: ClassLoader) {
+    private fun installSdk(base: XposedInterface, pkg: String, cl: ClassLoader) {
         var installed = 0
         for ((clsName, methodName) in Seed.adSdkInits) {
             val cls = runCatching { cl.loadClass(clsName) }.getOrNull()
@@ -122,6 +141,14 @@ object Guards {
             methods.forEachIndexed { i, m ->
                 base.hookSafe(m, "wurao_block_sdk_${clsName.hashCode()}_$i") { chain ->
                     Log.i("拦 SDK 初始化: $clsName#$methodName")
+                    HitLog.recordRaw(
+                        pkg = pkg,
+                        key = "sdk:$clsName#$methodName",
+                        note = "去掉广告 SDK",
+                        act = Act.BLOCK,
+                        domain = Domain.SDK,
+                        target = "$clsName#$methodName",
+                    )
                     // 不 proceed = init 从未发生
                     when (m.returnType) {
                         java.lang.Boolean.TYPE -> false

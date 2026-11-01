@@ -2,6 +2,7 @@ package com.wurao.inapp
 
 import android.view.View
 import com.wurao.core.Builtin
+import com.wurao.core.HitLog
 import com.wurao.core.Pacing
 import com.wurao.core.model.Rule
 import com.wurao.core.selector.Selector
@@ -73,6 +74,7 @@ object Executor {
                 val note = rule.note.ifBlank { rule.act.key }
                 // 这条日志由**目标进程**打出 —— 进程内生效的证据就是它（PID 不是模块进程）
                 Log.i("命中[$pkg] $note <- ${rule.target}")
+                HitLog.record(rule, pkg, pacing.currentPage, now)
                 return note
             }
         }
