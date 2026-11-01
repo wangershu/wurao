@@ -40,6 +40,12 @@ object Executor {
      * 规则索引（按包名 + 叶子特征）。**在 setRules 时建好**：
      * 每次 tick 重建等于把几千条规则的选择器重解析一遍，那就白优化了。
      */
+    /**
+     * **按包名预先分好**：否则每次 tick 都要线性扫一遍全部规则（2 万条时就占了
+     * 大半开销，实测 38ms）。这里在 setRules 时建一次，取用是 O(1)。
+     */
+    private var byPkg: Map<String, List<Rule>> = emptyMap()
+    private var globalRules: List<Rule> = emptyList()
     private var plans: Map<String, com.wurao.core.analyze.RuleIndex.Plan> = emptyMap()
     private var globalPlan = com.wurao.core.analyze.RuleIndex.Plan(emptyList())
 
@@ -51,6 +57,15 @@ object Executor {
         val sorted = list.sortedBy { priorityOf(it) }
         remoteRules.clear()
         remoteRules.addAll(sorted)
+        // "" 表示全局（不挑 App）的规则
+        byPkg = sorted.groupBy { r ->
+            when (val sc = r.scope) {
+                is com.wurao.core.model.Scope.App -> sc.pkg
+                is com.wurao.core.model.Scope.Component -> sc.pkg
+                com.wurao.core.model.Scope.Global -> ""
+            }
+        }
+        globalRules = byPkg[""] ?: emptyList()
         plans = com.wurao.core.analyze.RuleIndex.build(sorted)
         globalPlan = com.wurao.core.analyze.RuleIndex.globalPlan(sorted)
     }
@@ -85,6 +100,18 @@ object Executor {
      * @return 命中的规则备注（null = 没命中或没资格跑）
      */
     fun tick(root: View, pkg: String): String? {
+        val t0 = System.nanoTime()
+        try {
+            return tickInner(root, pkg)
+        } finally {
+            // 开销实测：页面切换后这一下到底花了多久。这是耗电的直接来源，
+            // 比"等 24 小时看电量"可测得多，出问题也能立刻看出来。
+            val ms = (System.nanoTime() - t0) / 1_000_000
+            if (ms >= 1) Log.d("开销: tick 耗时 ${ms}ms（$pkg）")
+        }
+    }
+
+    private fun tickInner(root: View, pkg: String): String? {
         if (pacing.isPaused) return null
 
         // ① 进程闸 + ② App 闸：先把没资格的规则筛掉，再谈匹配
@@ -156,8 +183,8 @@ object Executor {
      */
     private fun activeRules(pkg: String): List<Rule> {
         fun usable(r: Rule) = r.enabled && r.enabledFor(pkg) && !excluded.contains(pkg) && r.id !in stopped
-        // 用户自己抓的规则排前面：他是亲眼看到那个广告才建的，比内置规则更可信
-        return remoteRules.filter(::usable) + Builtin.rules().filter(::usable)
+        // 只取这个包的 + 全局的，不再扫全部；顺序还是「自抓 > 订阅 > 内置」
+        return ((byPkg[pkg] ?: emptyList()) + globalRules + Builtin.rules()).filter(::usable)
     }
 
     private fun priorityOf(r: Rule): Int = when (r.origin) {
