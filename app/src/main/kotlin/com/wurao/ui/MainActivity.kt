@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.platform.LocalContext
@@ -1154,7 +1155,14 @@ item {
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SmallTitle("规则从哪来")
-            Text("导入订阅 / 域名表", fontWeight = FontWeight.Bold)
+            var subExpanded by remember { mutableStateOf(false) }
+            SettingRow(
+                title = "导入订阅 / 域名表",
+                summary = "点开粘贴订阅内容或域名表，也可以填网址",
+                icon = Icons.Default.Download,
+                expanded = subExpanded,
+                onClick = { subExpanded = !subExpanded },
+            ) {
             Text(
                 "粘贴订阅内容或域名表，或填网址（联网下载）。反复导入同一份不会翻倍，" +
                     "更新订阅也不会动你自己抓的规则。",
@@ -1187,6 +1195,7 @@ item {
                 }) { Text("清空订阅") }
             }
             if (subReport.isNotEmpty()) Text(subReport, style = MaterialTheme.typography.bodySmall)
+            }
 
             var confirmDel by remember { mutableStateOf<Rule?>(null) }
             DeleteConfirm(confirmDel, { confirmDel = null }) {
@@ -1505,4 +1514,56 @@ private fun DeleteConfirm(rule: Rule?, onDismiss: () -> Unit, onConfirm: () -> U
         confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("删掉") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("不删") } },
     )
+}
+
+/**
+ * 设置项的一行：标题 + 一句说明，右边箭头，**点开才展开内容**。
+ * 之前是一个个输入框直接摊在页面上，很长很乱；收起来之后一屏能看完有哪些项。
+ */
+@Composable
+private fun SettingRow(
+    title: String,
+    summary: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onClick() }
+                    .padding(14.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title)
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (expanded) {
+                Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
+                    content()
+                }
+            }
+        }
+    }
 }
