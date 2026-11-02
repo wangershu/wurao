@@ -680,7 +680,41 @@ class MainActivity : ComponentActivity() {
             pushRulesAsync()
         }
 
+        // 状态卡：一打开就知道现在靠什么在干活（旧版 4.3 的结构）
+        val allRules by remember { mutableStateOf(RuleStore.all()) }
+        val subs = remember(allRules) { allRules.count { it.origin !is Origin.User } }
+        // 命中记录的时间字段不叫 time，不瞎猜；这里就显示总条数
+        val recent = rows.size
+
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("现在靠什么在干活", fontWeight = FontWeight.Bold)
+                    Text(
+                        "规则库 ${allRules.size} 条 · 订阅导入 $subs 条",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "命中记录 $recent 条",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { tabState = 1 }) {
+                            Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("抓一条规则")
+                        }
+                        Button(onClick = { tabState = 2 }) {
+                            Icon(Icons.Default.Download, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("同步订阅")
+                        }
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("命中记录", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Button(onClick = { rows = HitStore.all() }) { Text("刷新") }
