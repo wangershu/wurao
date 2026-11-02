@@ -120,6 +120,10 @@ class MainActivity : ComponentActivity() {
 
     /** @return true 表示这条 intent 是调试直达，已经处理完（调用方应 finish） */
     /** 调试直达要打开的详情页包名（--es open_pkg） */
+    /** 应用页的搜索词。放 Activity 层：列表作用域（LazyListScope）里不能用 remember。 */
+    private var appQuery by mutableStateOf("")
+
+    /** 调试直达要打开的详情页包名（--es open_pkg）。 */
     private var initialPkg: String? = null
 
     /**
