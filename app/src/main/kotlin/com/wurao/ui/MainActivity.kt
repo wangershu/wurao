@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -100,7 +101,9 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        setContent { WuraoApp() }
+        // miuix 组件要从 MiuixTheme 取主题（CompositionLocal），
+        // 不包的话一打开就崩 —— 之前就是这么栽的
+        setContent { MiuixTheme { WuraoApp() } }
     }
 
     /**
