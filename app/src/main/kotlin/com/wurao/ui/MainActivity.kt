@@ -1089,7 +1089,7 @@ item {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Act.entries.filter { it.allows(com.wurao.core.model.Domain.NODE) }.forEach { a ->
-                    Button(onClick = { act = a }) { Text(a.key) }
+                    Button(onClick = { act = a }) { Text(actCn(a)) }
                 }
             }
             Button(onClick = { add() }) { Text("加一条") }
