@@ -1201,7 +1201,16 @@ item {
             DeleteConfirm(confirmDel, { confirmDel = null }) {
                 confirmDel?.let { RuleStore.remove(it.id); save() }
             }
-            Text("我的规则", fontWeight = FontWeight.Bold)
+            var mineExpanded by remember { mutableStateOf(false) }
+            SettingRow(
+                title = "我自己的规则",
+                summary = "手写一条，或者从应用页抓屏挑控件（抓来的更省事）",
+                icon = Icons.Default.Add,
+                expanded = mineExpanded,
+                onClick = { mineExpanded = !mineExpanded },
+            ) { }
+            if (mineExpanded) {
+                Text("我的规则", fontWeight = FontWeight.Bold)
             Text(
                 "自己加的规则优先级最高 —— 你是亲眼看到那个东西才加的，比订阅来的更可信。\n" +
                     "例：藏掉美团底栏的视频入口 → 包名 com.sankuai.meituan，" +
@@ -1322,8 +1331,18 @@ item {
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    SmallTitle("备份与自检")
-            Text("备份 / 恢复", fontWeight = FontWeight.Bold)
+                                }
+
+            SmallTitle("备份与自检")
+            var backupExpanded by remember { mutableStateOf(false) }
+            SettingRow(
+                title = "备份 / 恢复",
+                summary = "导出成一段文本存着，换手机粘回来",
+                icon = Icons.Default.Save,
+                expanded = backupExpanded,
+                onClick = { backupExpanded = !backupExpanded },
+            ) { }
+            if (backupExpanded) {
                     Text(
                         "导出成一段文本，复制到任何地方存着；换手机或重装后粘回来即可。",
                         style = MaterialTheme.typography.bodySmall,
@@ -1354,6 +1373,7 @@ item {
                 }
             }
 
+            }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("自检", fontWeight = FontWeight.Bold)
