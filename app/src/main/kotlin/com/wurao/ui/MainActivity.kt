@@ -756,6 +756,11 @@ class MainActivity : ComponentActivity() {
                                         r.target,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
+                                    Text(
+                                        timeAgo(r.lastAtMs),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                     if (r.ruleId in stopped) {
                                         Text("已停用", style = MaterialTheme.typography.bodySmall)
                                     }
@@ -1155,6 +1160,11 @@ item {
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SmallTitle("规则从哪来")
+            Text(
+                "广告域名表来自 AdClose（开源的广告 / 追踪域名清单），用来拦广告的网络请求。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             var subExpanded by remember { mutableStateOf(false) }
             SettingRow(
                 title = "导入订阅 / 域名表",
@@ -1333,7 +1343,7 @@ item {
                 Column(Modifier.padding(16.dp)) {
                                 }
 
-            SmallTitle("备份与自检")
+            SmallTitle("备份与恢复")
             var backupExpanded by remember { mutableStateOf(false) }
             SettingRow(
                 title = "备份 / 恢复",
@@ -1376,30 +1386,7 @@ item {
             }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("自检", fontWeight = FontWeight.Bold)
-                    Text("框架：${if (CfgPush.bound) "已连接" else "未连接"}")
-                    Text("抓屏服务：${if (SnapshotService.active) "已开启" else "未开启"}")
-                    Text("我的规则：${rules.size} 条")
-                    Text("命中记录：${HitStore.all().size} 条")
-                    val paused = prefs().getString(Cfg.KEY_PAUSED, null) == "true"
-                    Text("一键全停：${if (paused) "已停（什么都不做）" else "运行中"}")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            prefs().edit().putString(Cfg.KEY_PAUSED, "true").apply()
-                            CfgPush.flush(this@MainActivity)
-                        }) { Icon(Icons.Default.Block, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("全部停") }
-                        Button(onClick = {
-                            prefs().edit().putString(Cfg.KEY_PAUSED, "false").apply()
-                            CfgPush.flush(this@MainActivity)
-                        }) { Icon(Icons.Default.Restore, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("恢复") }
-                    }
-                }
-            }
-
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("关于", fontWeight = FontWeight.Bold)
-                    SmallTitle("关于")
+        SmallTitle("关于")
             val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
             Text(
                 "无扰 $ver —— 只自用，不分发。",
@@ -1585,5 +1572,17 @@ private fun SettingRow(
                 }
             }
         }
+    }
+}
+
+/** 多久之前。命中记录只看次数的话，分不清是刚才拦的还是上周拦的。 */
+private fun timeAgo(ms: Long): String {
+    val d = System.currentTimeMillis() - ms
+    return when {
+        d < 60_000 -> "刚刚"
+        d < 3_600_000 -> "${d / 60_000} 分钟前"
+        d < 86_400_000 -> "${d / 3_600_000} 小时前"
+        d < 7 * 86_400_000L -> "${d / 86_400_000} 天前"
+        else -> java.text.SimpleDateFormat("M月d日", java.util.Locale.CHINA).format(java.util.Date(ms))
     }
 }
