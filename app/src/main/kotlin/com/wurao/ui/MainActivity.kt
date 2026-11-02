@@ -623,7 +623,7 @@ class MainActivity : ComponentActivity() {
                             detailPkg != null -> "应用详情"
                             tab == 0 -> "主页"
                             tab == 1 -> "应用"
-                            else -> "关于"
+                            else -> "设置"
                         },
                     )
                 },
@@ -632,7 +632,7 @@ class MainActivity : ComponentActivity() {
                         val items = listOf(
                             "主页" to Icons.Default.Assessment,
                             "应用" to Icons.Default.Apps,
-                            "关于" to Icons.Default.Info,
+                            "设置" to Icons.Default.Settings,
                         )
                         items.forEachIndexed { i, (title, vec) ->
                             NavigationBarItem(

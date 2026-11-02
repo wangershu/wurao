@@ -38,6 +38,15 @@ class FrameOverlay(
         textSize = 22f
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
     }
+    private val bar = Paint().apply { color = Color.argb(235, 28, 28, 30) }
+    private val barBtn = Paint().apply { color = Color.argb(255, 103, 80, 164) }
+    private val barBtnCancel = Paint().apply { color = Color.argb(120, 90, 90, 95) }
+    private val barText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 28f }
+
+    /** 当前选中的控件（点了之后不是立刻存，先在底栏给建议）。 */
+    private var selected: SnapshotService.Pick? = null
+    private val suggest: Pair<String, String>?
+        get() = selected?.let { suggestFor(it) }
 
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
@@ -49,21 +58,77 @@ class FrameOverlay(
             val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
             c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
         }
-        // 提示：点一下就选，再点空白处取消
-        c.drawText("点控件选中；点没有控件的空白处取消", 24f, height - 24f, label)
+        // 选中的那个高亮
+        selected?.let { p ->
+            val r = p.bounds
+            c.drawRect(r, Paint().apply {
+                style = Paint.Style.STROKE; strokeWidth = 4f; color = Color.argb(255, 103, 80, 164)
+            })
+        }
+
+        val barH = if (selected != null) 190 else 120
+        val top = (height - barH).toFloat()
+        c.drawRect(0f, top, width.toFloat(), height.toFloat(), bar)
+        val (act, why) = suggest ?: (null to null)
+        if (selected == null) {
+            c.drawText("点一个控件选中它，点没有控件的空白处取消", 32f, top + 55f, barText)
+        } else {
+            c.drawText("建议：$act —— $why", 32f, top + 55f, barText)
+            val w = width.toFloat()
+            c.drawRect(w * 0.42f, top + 90f, w * 0.72f, top + 160f, barBtn)
+            c.drawRect(w * 0.75f, top + 90f, w * 0.97f, top + 160f, barBtnCancel)
+            c.drawText("按建议做", w * 0.50f, top + 134f, barText)
+            c.drawText("取消", w * 0.83f, top + 134f, barText)
+        }
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (e.action != MotionEvent.ACTION_UP) return true
-        val hit = pickAt(e.x.toInt(), e.y.toInt())
+        val x = e.x
+        val y = e.y
+        val sel = selected
+        if (sel != null) {
+            val barH = 190
+            val top = height - barH
+            if (y >= top) {
+                val w = width.toFloat()
+                if (x >= w * 0.42f && x <= w * 0.72f) {
+                    // 按建议做
+                    onPick(sel)
+                    return true
+                }
+                if (x >= w * 0.75f) {
+                    selected = null
+                    invalidate()
+                    return true
+                }
+                return true
+            }
+        }
+
+        val hit = pickAt(x.toInt(), y.toInt())
         if (hit == null) {
             // 点空白处 = 取消。不给退路的话框会一直盖在人家界面上，你连退都退不掉
             Toast.makeText(ctx, "已取消", Toast.LENGTH_SHORT).show()
             hide(ctx)
             return true
         }
-        onPick(hit)
+        // 选中，但**不立刻存** —— 先在底栏给一句建议和理由，让你确认
+        selected = hit
+        invalidate()
         return true
+    }
+
+    /** 给一句人话建议 + 理由（旧版的做法，别让人盲选动作）。 */
+    private fun suggestFor(p: SnapshotService.Pick): Pair<String, String> {
+        val txt = p.node.text ?: p.node.desc ?: ""
+        val skipLike = txt.contains("跳过") || txt.contains("关闭") || txt.contains("Skip", true) ||
+            txt.contains("跳过广告")
+        return if (skipLike) {
+            "点掉" to "文案里写着『$txt』，像是要你点的那种"
+        } else {
+            "藏起来" to "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）"
+        }
     }
 
     /** 命中的控件：取包含该点且面积最小的那个（最靠里的那个才是你看到的）。 */
