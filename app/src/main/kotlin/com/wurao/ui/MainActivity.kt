@@ -801,7 +801,12 @@ class MainActivity : ComponentActivity() {
             Text(note, style = MaterialTheme.typography.bodySmall)
             ManualPkgEntry(onOpen)
             LazyColumn {
-                items(apps) { (pkg, label) ->
+                // 按命中数排序，每行告诉你这个应用拦了多少（旧版 4.3 的结构）
+                // 注意：这里是 LazyListScope 的 lambda，不能用 remember（不是 @Composable 上下文）；
+                // 好在这只是普通计算，命中记录就那么几条，每次重算也不贵
+                val hitCount = HitStore.all().groupBy { it.pkg }.mapValues { e -> e.value.sumOf { h -> h.count } }
+                val appsSorted = apps.sortedByDescending { hitCount[it.first] ?: 0 }
+                items(appsSorted) { (pkg, label) ->
                     Card(
                         Modifier
                             .fillMaxWidth()
@@ -815,8 +820,9 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(label)
+                                val n = hitCount[pkg] ?: 0
                                 Text(
-                                    pkg,
+                                    if (n > 0) "$pkg · 拦了 $n 次" else pkg,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -975,7 +981,13 @@ item {
             }
 
             item {
-                Text("抓屏", fontWeight = FontWeight.Bold)
+                SmallTitle("还有广告？")
+            Text(
+                "点下面的按钮，然后切回这个应用 —— 控件会被橙框框出来，点哪个就治哪个。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text("抓屏", fontWeight = FontWeight.Bold)
                 if (!SnapshotService.active) {
                     Text(
                         "抓屏服务没连上。Xposed 读不到别的 App 的界面，这层必须靠无障碍。" +
@@ -1337,6 +1349,12 @@ item {
                 Column(Modifier.padding(16.dp)) {
                     Text("关于", fontWeight = FontWeight.Bold)
                     SmallTitle("关于")
+            val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
+            Text(
+                "无扰 $ver —— 只自用，不分发。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text("只自用，不分发。风险级能力默认全关，出问题点「全部退回」。")
                 }
             }
