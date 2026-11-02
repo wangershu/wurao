@@ -1078,29 +1078,100 @@ item {
             Button(onClick = { add() }) { Text("加一条") }
             if (tip.isNotEmpty()) Text(tip, style = MaterialTheme.typography.bodySmall)
 
-            rules.forEachIndexed { i, r ->
-                Card(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(r.target, style = MaterialTheme.typography.bodySmall)
-                            val p = when (val s = r.scope) {
-                                is Scope.App -> s.pkg
-                                is Scope.Component -> s.pkg
-                                Scope.Global -> "所有应用"
-                            }
-                            Text(p, style = MaterialTheme.typography.bodySmall)
-                            Spacer(Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Tag(actCn(r.act))
-                                Tag(domainCn(r.domain))
-                            }
-                        }
-                        IconButton(onClick = { confirmDel = r }) {
-                            Icon(Icons.Default.Delete, contentDescription = "删除这条规则")
+            // 规则按来源分组显示。**不能逐条铺开**：库里两万条（大半是广告域名），
+            // 一次性组合两万个 Card 会把界面压死（设置页一打开就卡死）。
+            // 域名表和订阅各占一行，只有你自己抓的那几条才逐条列。
+            val mine = remember(rules) { rules.filter { it.origin is Origin.User } }
+            val groups = remember(rules) {
+                rules.filter { it.origin !is Origin.User }
+                    .groupBy { r ->
+                        when (val o = r.origin) {
+                            is Origin.Subscription -> "订阅#" + o.subsId + "：" + r.groupKey
+                            is Origin.Seed -> "种子 ${o.name}：" + r.groupKey
+                            Origin.Builtin -> "内置：" + r.groupKey
+                            Origin.User -> "自抓：" + r.groupKey
                         }
                     }
+            }
+
+            if (mine.isNotEmpty()) {
+                Text("我自己抓的（${mine.size} 条）", fontWeight = FontWeight.Bold)
+                mine.forEach { r ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                actIcon(r.act),
+                                contentDescription = null,
+                                modifier = Modifier.size(26.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(r.target, style = MaterialTheme.typography.bodySmall)
+                                val p = when (val sc = r.scope) {
+                                    is Scope.App -> sc.pkg
+                                    is Scope.Component -> sc.pkg
+                                    Scope.Global -> "所有应用"
+                                }
+                                Text(
+                                    p,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Tag(actCn(r.act))
+                                    Tag(domainCn(r.domain))
+                                }
+                            }
+                            IconButton(onClick = { confirmDel = r }) {
+                                Icon(Icons.Default.Delete, contentDescription = "删除这条规则")
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
+
+            if (groups.isNotEmpty()) {
+                Text("订阅与导入（${groups.values.sumOf { it.size }} 条，合并显示）", fontWeight = FontWeight.Bold)
+                groups.forEach { (name, list) ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(name, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    "${list.size} 条",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            // 整份删掉：订阅不想要了，一次清干净
+                            IconButton(onClick = {
+                                list.forEach { RuleStore.remove(it.id) }
+                                save()
+                            }) {
+                                Icon(Icons.Default.Delete, contentDescription = "删掉这一整份")
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            if (rules.isEmpty()) {
+                EmptyHint(Icons.Default.Add, "还没有规则", "上面填包名 + 选择器 + 动作加一条，或者从应用页抓屏挑控件。")
+            }
+
+
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
