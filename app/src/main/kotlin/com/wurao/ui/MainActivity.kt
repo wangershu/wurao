@@ -42,10 +42,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -611,8 +612,19 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(tabState) { tab = tabState }
         var openPkg by remember { mutableStateOf<String?>(initialPkg) }
 
-        MaterialTheme {
+        val detailPkg = openPkg
+        MiuixTheme {
             Scaffold(
+                topBar = {
+                    SmallTopAppBar(
+                        title = when {
+                            detailPkg != null -> "应用详情"
+                            tab == 0 -> "看板"
+                            tab == 1 -> "应用"
+                            else -> "设置"
+                        },
+                    )
+                },
                 bottomBar = {
                     NavigationBar {
                         val items = listOf(
@@ -622,19 +634,18 @@ class MainActivity : ComponentActivity() {
                         )
                         items.forEachIndexed { i, (title, vec) ->
                             NavigationBarItem(
-                                selected = tab == i,
+                                selected = tab == i && detailPkg == null,
                                 onClick = { tab = i; tabState = i; openPkg = null },
-                                label = { Text(title) },
-                                icon = { Icon(vec, contentDescription = title) },
+                                icon = vec,
+                                label = title,
                             )
                         }
                     }
                 },
             ) { padding ->
-                val detail = openPkg
                 Column(Modifier.fillMaxSize().padding(padding)) {
                     when {
-                        detail != null -> AppDetailScreen(detail, { openPkg = null }) { openPkg = null }
+                        detailPkg != null -> AppDetailScreen(detailPkg, { openPkg = null }) { openPkg = null }
                         tab == 0 -> BoardScreen()
                         tab == 1 -> AppsScreen { openPkg = it }
                         else -> SettingsScreen()
