@@ -852,6 +852,8 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun AppDetailScreen(pkg: String, onBack: () -> Unit, onClose: () -> Unit) {
+        var hitVersion by remember { mutableStateOf(0) }
+        val hits = remember(hitVersion, pkg) { HitStore.all().filter { it.pkg == pkg } }
         var kinds by remember { mutableStateOf(Cfg.decodeKinds(prefs().getString(Cfg.riskKey(pkg), null))) }
         var candidates by remember { mutableStateOf<List<AdComponentFinder.Candidate>>(emptyList()) }
         var picked by remember { mutableStateOf(Cfg.decodeList(prefs().getString(Cfg.componentsKey(pkg), null)).toSet()) }
@@ -878,7 +880,58 @@ class MainActivity : ComponentActivity() {
         }
 
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 点进一个应用，先看它命中的规则 + 开关（旧版 4.3 的结构）
+        item { SmallTitle("命中的规则（${hits.size}）") }
+        if (hits.isEmpty()) {
             item {
+                EmptyHint(
+                    Icons.Default.TouchApp,
+                    "还没命中过",
+                    "这个应用里还没动过手。用一阵子，拦过的东西会列在这里，可逐条停用。",
+                )
+            }
+        } else {
+            items(hits, key = { it.ruleId }) { h ->
+                val rule = RuleStore.all().firstOrNull { it.id == h.ruleId }
+                val off = rule?.enabled == false
+                Card(Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.padding(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            actIcon(Act.fromKey(h.act) ?: Act.HIDE),
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(h.note, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${h.count} 次",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                h.target,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(onClick = {
+                            // 停用改规则本身（规则库只有一处，不会两边对不上）；停用不等于删除
+                            RuleStore.setEnabled(h.ruleId, off)
+                            pushRulesAsync()
+                            hitVersion++
+                        }) { Text(if (off) "恢复" else "停用") }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        item {
                 Text(pkg, fontWeight = FontWeight.Bold)
                 Text(
                     "风险级能力默认全关。开了之后这个 App 若出现异常，先点「全部退回」。",
@@ -1175,7 +1228,7 @@ item {
                                 Spacer(Modifier.height(4.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Tag(actCn(r.act))
-                                    Tag(domainCn(r.domain))
+                                    Tag(domainCn(r.domain.key))
                                 }
                             }
                             IconButton(onClick = { confirmDel = r }) {
@@ -1366,14 +1419,14 @@ private fun actCn(act: Act): String = when (act.key) {
 }
 
 /** 域的中文说法。 */
-private fun domainCn(d: com.wurao.core.model.Domain): String = when (d.key) {
+private fun domainCn(key: String): String = when (key) {
     "node" -> "控件"
     "host" -> "域名"
     "component" -> "组件"
     "sdk" -> "SDK"
     "sensor" -> "传感器"
     "file" -> "文件"
-    else -> d.key
+    else -> key
 }
 
 /** 动作对应的图标：一眼看出这条规则是"点掉"还是"藏起来"。 */
