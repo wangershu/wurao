@@ -805,7 +805,25 @@ class MainActivity : ComponentActivity() {
                 // 注意：这里是 LazyListScope 的 lambda，不能用 remember（不是 @Composable 上下文）；
                 // 好在这只是普通计算，命中记录就那么几条，每次重算也不贵
                 val hitCount = HitStore.all().groupBy { it.pkg }.mapValues { e -> e.value.sumOf { h -> h.count } }
-                val appsSorted = apps.sortedByDescending { hitCount[it.first] ?: 0 }
+                val appsSorted = apps
+                    .filter { appQuery.isBlank() || it.first.contains(appQuery, true) || it.second.contains(appQuery, true) }
+                    .sortedByDescending { hitCount[it.first] ?: 0 }
+                item {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = appQuery,
+                        onValueChange = { appQuery = it },
+                        label = { Text("搜应用（名字或包名）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+                item {
+                    Text(
+                        "${appsSorted.size} 个应用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 items(appsSorted) { (pkg, label) ->
                     Card(
                         Modifier
