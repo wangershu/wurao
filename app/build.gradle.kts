@@ -58,7 +58,6 @@ dependencies {
     implementation(libs.libxposed.service)
 
     // ---------- UI ----------
-    // 视觉组件先用 material3 把骨架跑通；上一版用的是 miuix（MIUI 风格），
     // 骨架稳定后再换回去 —— 换的是组件库，信息架构（三个页签）不变。
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -68,6 +67,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.compose.activity)
     implementation(libs.compose.lifecycle.runtime)
+    // 坐标（包确实存在、网络也通），所以改成把 aar 下到本地直接引 —— 别改成远程坐标，
+    // 会重新拉不到。
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
 
