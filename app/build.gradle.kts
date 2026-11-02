@@ -67,6 +67,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.compose.activity)
     implementation(libs.compose.lifecycle.runtime)
+    // miuix（MIUI 风格 UI）：Gradle 在这台机器解析不到远程坐标，用本地 aar
+    implementation(files("libs/miuix-ui-0.9.0.aar"))
+    implementation(files("libs/miuix-icons-0.9.0.aar"))
+    implementation(files("libs/miuix-preference-0.9.0.aar"))
     // 坐标（包确实存在、网络也通），所以改成把 aar 下到本地直接引 —— 别改成远程坐标，
     // 会重新拉不到。
     implementation(libs.androidx.core.ktx)
