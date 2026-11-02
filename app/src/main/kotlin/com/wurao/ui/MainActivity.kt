@@ -27,6 +27,19 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -36,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -589,6 +603,9 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun WuraoApp() {
         var tab by remember { mutableStateOf(tabState) }
+        // 直达改的是 Activity 层的 tabState；remember 只在首次组合读一次，
+        // 不跟着同步的话"切页"直达在界面已经打开时就完全无效
+        LaunchedEffect(tabState) { tab = tabState }
         var openPkg by remember { mutableStateOf<String?>(initialPkg) }
 
         MaterialTheme {
@@ -666,7 +683,17 @@ class MainActivity : ComponentActivity() {
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(rows) { r ->
                         Card(Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(12.dp)) {
+                            Row(
+                                Modifier.padding(12.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Default.TouchApp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(r.pkg, style = MaterialTheme.typography.bodySmall)
                                     Text(r.describe())
@@ -725,15 +752,30 @@ class MainActivity : ComponentActivity() {
             ManualPkgEntry(onOpen)
             LazyColumn {
                 items(apps) { (pkg, label) ->
-                    Row(
+                    Card(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { onOpen(pkg) }
-                            .padding(vertical = 10.dp),
+                            .clickable { onOpen(pkg) },
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(label)
-                            Text(pkg, style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            AppIcon(pkg)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(label)
+                                Text(
+                                    pkg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -798,7 +840,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            item { Text("风险级能力", fontWeight = FontWeight.Bold) }
+item {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "风险级能力",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
             items(RiskGate.Kind.entries.toList()) { kind ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
@@ -993,6 +1050,10 @@ class MainActivity : ComponentActivity() {
             }
             if (subReport.isNotEmpty()) Text(subReport, style = MaterialTheme.typography.bodySmall)
 
+            var confirmDel by remember { mutableStateOf<Rule?>(null) }
+            DeleteConfirm(confirmDel, { confirmDel = null }) {
+                confirmDel?.let { RuleStore.remove(it.id); save() }
+            }
             Text("我的规则", fontWeight = FontWeight.Bold)
             Text(
                 "自己加的规则优先级最高 —— 你是亲眼看到那个东西才加的，比订阅来的更可信。\n" +
@@ -1021,18 +1082,22 @@ class MainActivity : ComponentActivity() {
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(12.dp)) {
                         Column(Modifier.weight(1f)) {
-                            Text(r.act.key + " · " + r.target, style = MaterialTheme.typography.bodySmall)
+                            Text(r.target, style = MaterialTheme.typography.bodySmall)
                             val p = when (val s = r.scope) {
                                 is Scope.App -> s.pkg
                                 is Scope.Component -> s.pkg
                                 Scope.Global -> "所有应用"
                             }
                             Text(p, style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Tag(actCn(r.act))
+                                Tag(domainCn(r.domain))
+                            }
                         }
-                        Button(onClick = {
-                            RuleStore.remove(r.id)
-                            save()
-                        }) { Icon(Icons.Default.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("删") }
+                        IconButton(onClick = { confirmDel = r }) {
+                            Icon(Icons.Default.Delete, contentDescription = "删除这条规则")
+                        }
                     }
                 }
             }
@@ -1129,4 +1194,98 @@ private fun EmptyHint(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * 应用图标。取不到就退回一个通用图标 —— 列表中一排灰方块很难看，
+ * 有图标一眼就能认出是哪个 App。
+ */
+@Composable
+private fun AppIcon(pkg: String) {
+    val ctx = LocalContext.current
+    val bmp = remember(pkg) {
+        runCatching {
+            val d = ctx.packageManager.getApplicationIcon(pkg)
+            // 必须固定小尺寸：应用图标 intrinsic 常常是 512x512，
+            // 按原尺寸建 Bitmap 一个就 1MB，几百个应用直接把内存吃满
+            // （实测堆到 240MB/256MB、界面疯狂 GC）。
+            val px = 64
+            val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
+            d.setBounds(0, 0, px, px)
+            d.draw(android.graphics.Canvas(b))
+            b.asImageBitmap()
+        }.getOrNull()
+    }
+    if (bmp != null) {
+        Image(
+            bmp,
+            contentDescription = null,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+        )
+    } else {
+        Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(36.dp))
+    }
+}
+
+/** 动作的中文说法（模型里只有英文 key，界面上得说人话）。 */
+private fun actCn(act: Act): String = when (act.key) {
+    "click" -> "点掉"
+    "long_click" -> "长按"
+    "hide" -> "藏起来"
+    "remove" -> "摘掉"
+    "block" -> "拦住"
+    "goto" -> "跳走"
+    "back" -> "返回"
+    else -> act.key
+}
+
+/** 域的中文说法。 */
+private fun domainCn(d: com.wurao.core.model.Domain): String = when (d.key) {
+    "node" -> "控件"
+    "host" -> "域名"
+    "component" -> "组件"
+    "sdk" -> "SDK"
+    "sensor" -> "传感器"
+    "file" -> "文件"
+    else -> d.key
+}
+
+/** 动作对应的图标：一眼看出这条规则是"点掉"还是"藏起来"。 */
+private fun actIcon(act: Act): androidx.compose.ui.graphics.vector.ImageVector = when (act.key) {
+    "click", "long_click" -> Icons.Default.TouchApp
+    "hide" -> Icons.Default.VisibilityOff
+    "block" -> Icons.Default.Block
+    "remove" -> Icons.Default.Delete
+    "back" -> Icons.Default.Close
+    else -> Icons.Default.Shield
+}
+
+/** 小标签：把"动作/域"从正文拆出来，正文只留选择器。 */
+@Composable
+private fun Tag(text: String) {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+/** 删除确认：规则删了就没了，不能一点就没。 */
+@Composable
+private fun DeleteConfirm(rule: Rule?, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    if (rule == null) return
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("删掉这条规则？") },
+        text = { Text(rule.target) },
+        confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("删掉") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("不删") } },
+    )
 }
