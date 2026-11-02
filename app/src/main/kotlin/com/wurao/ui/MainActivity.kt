@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
@@ -43,6 +44,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.material3.Icon
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import androidx.compose.material3.MaterialTheme
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -619,18 +621,18 @@ class MainActivity : ComponentActivity() {
                     SmallTopAppBar(
                         title = when {
                             detailPkg != null -> "应用详情"
-                            tab == 0 -> "看板"
+                            tab == 0 -> "主页"
                             tab == 1 -> "应用"
-                            else -> "设置"
+                            else -> "关于"
                         },
                     )
                 },
                 bottomBar = {
                     NavigationBar {
                         val items = listOf(
-                            "看板" to Icons.Default.Assessment,
+                            "主页" to Icons.Default.Assessment,
                             "应用" to Icons.Default.Apps,
-                            "设置" to Icons.Default.Settings,
+                            "关于" to Icons.Default.Info,
                         )
                         items.forEachIndexed { i, (title, vec) ->
                             NavigationBarItem(
@@ -1030,6 +1032,7 @@ item {
         }
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SmallTitle("规则从哪来")
             Text("导入订阅 / 域名表", fontWeight = FontWeight.Bold)
             Text(
                 "粘贴订阅内容或域名表，或填网址（联网下载）。反复导入同一份不会翻倍，" +
@@ -1189,7 +1192,8 @@ item {
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("备份 / 恢复", fontWeight = FontWeight.Bold)
+                    SmallTitle("备份与自检")
+            Text("备份 / 恢复", fontWeight = FontWeight.Bold)
                     Text(
                         "导出成一段文本，复制到任何地方存着；换手机或重装后粘回来即可。",
                         style = MaterialTheme.typography.bodySmall,
@@ -1245,7 +1249,8 @@ item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("关于", fontWeight = FontWeight.Bold)
-                    Text("只自用，不分发。风险级能力默认全关，出问题点「全部退回」。")
+                    SmallTitle("关于")
+            Text("只自用，不分发。风险级能力默认全关，出问题点「全部退回」。")
                 }
             }
         }
