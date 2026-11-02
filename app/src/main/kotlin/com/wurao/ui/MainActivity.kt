@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Restore
@@ -123,6 +124,9 @@ class MainActivity : ComponentActivity() {
     /** 调试直达要打开的详情页包名（--es open_pkg） */
     /** 应用页的搜索词。放 Activity 层：列表作用域（LazyListScope）里不能用 remember。 */
     private var appQuery by mutableStateOf("")
+
+    /** 应用页：只看拦过的应用（282 个里只有两三个动过手，其余翻起来是噪音）。 */
+    private var appOnlyHit by mutableStateOf(false)
 
     /** 调试直达要打开的详情页包名（--es open_pkg）。 */
     private var initialPkg: String? = null
@@ -717,6 +721,24 @@ class MainActivity : ComponentActivity() {
                             Text("同步订阅")
                         }
                     }
+                    // 一键全停：出问题时要能立刻停手，不该藏在设置页里翻
+                    var paused by remember { mutableStateOf(prefs().getString(Cfg.KEY_PAUSED, null) == "true") }
+                    Button(
+                        onClick = {
+                            paused = !paused
+                            prefs().edit().putString(Cfg.KEY_PAUSED, if (paused) "true" else "false").apply()
+                            pushRulesAsync()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            if (paused) Icons.Default.PlayArrow else Icons.Default.Block,
+                            null,
+                            Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (paused) "已全部暂停（点这里恢复）" else "全部暂停")
+                    }
                 }
             }
 
@@ -817,6 +839,7 @@ class MainActivity : ComponentActivity() {
                 val hitCount = HitStore.all().groupBy { it.pkg }.mapValues { e -> e.value.sumOf { h -> h.count } }
                 val appsSorted = apps
                     .filter { appQuery.isBlank() || it.first.contains(appQuery, true) || it.second.contains(appQuery, true) }
+                    .filter { !appOnlyHit || (hitCount[it.first] ?: 0) > 0 }
                     .sortedByDescending { hitCount[it.first] ?: 0 }
                 item {
                     androidx.compose.material3.OutlinedTextField(
@@ -828,11 +851,22 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 item {
-                    Text(
-                        "${appsSorted.size} 个应用",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { appOnlyHit = !appOnlyHit },
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Switch(checked = appOnlyHit, onCheckedChange = { appOnlyHit = it })
+                        Spacer(Modifier.width(8.dp))
+                        Text("只看拦过的", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${appsSorted.size} 个应用",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 items(appsSorted) { (pkg, label) ->
                     Card(
