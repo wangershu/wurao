@@ -29,11 +29,13 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
@@ -112,6 +114,7 @@ class MainActivity : ComponentActivity() {
 
         // miuix 组件要从 MiuixTheme 取主题（CompositionLocal），
         // 不包的话一打开就崩 —— 之前就是这么栽的
+        floatingBar = prefs().getBoolean("floating_bar", true)
         setContent { MiuixTheme { WuraoApp() } }
     }
 
@@ -131,6 +134,9 @@ class MainActivity : ComponentActivity() {
 
     /** 应用页：只看拦过的应用（282 个里只有两三个动过手，其余翻起来是噪音）。 */
     private var appOnlyHit by mutableStateOf(false)
+
+    /** 底栏悬浮还是贴底（旧版外观设置里的一项）。 */
+    private var floatingBar by mutableStateOf(true)
 
     /** 调试直达要打开的详情页包名（--es open_pkg）。 */
     private var initialPkg: String? = null
@@ -641,20 +647,32 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 bottomBar = {
-                    // 旧版底栏是悬浮胶囊（FloatingNavigationBar），不是贴底的一条
-                    FloatingNavigationBar {
-                        val items = listOf(
-                            "主页" to Icons.Default.Assessment,
-                            "应用" to Icons.Default.Apps,
-                            "设置" to Icons.Default.Settings,
-                        )
-                        items.forEachIndexed { i, (title, vec) ->
-                            FloatingNavigationBarItem(
-                                selected = tab == i && detailPkg == null,
-                                onClick = { tab = i; tabState = i; openPkg = null },
-                                icon = vec,
-                                label = title,
-                            )
+                    val items = listOf(
+                        "主页" to Icons.Default.Assessment,
+                        "应用" to Icons.Default.Apps,
+                        "设置" to Icons.Default.Settings,
+                    )
+                    if (floatingBar) {
+                        // 旧版默认：悬浮胶囊（圆角、悬空、与屏幕底边有间距）
+                        FloatingNavigationBar {
+                            items.forEachIndexed { i, (title, vec) ->
+                                FloatingNavigationBarItem(
+                                    selected = tab == i && detailPkg == null,
+                                    onClick = { tab = i; tabState = i; openPkg = null },
+                                    icon = vec, label = title,
+                                )
+                            }
+                        }
+                    } else {
+                        // 关掉悬浮 → 贴底整条
+                        NavigationBar {
+                            items.forEachIndexed { i, (title, vec) ->
+                                NavigationBarItem(
+                                    selected = tab == i && detailPkg == null,
+                                    onClick = { tab = i; tabState = i; openPkg = null },
+                                    icon = vec, label = title,
+                                )
+                            }
                         }
                     }
                 },
@@ -701,96 +719,135 @@ class MainActivity : ComponentActivity() {
         val recent = rows.size
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("现在靠什么在干活", fontWeight = FontWeight.Bold)
-                    val frameOk = CfgPush.bound
-                    val services = android.provider.Settings.Secure.getString(
-                        contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-                    ) ?: ""
-                    val a11yOn = services.contains(packageName)
-                    Text(
-                        if (frameOk) "✓ 框架已接管，规则库 ${allRules.size} 条（订阅 $subs 条）"
-                        else "⚠ 框架服务没连上 —— LSPosed 里确认一下「无扰」已启用，再回来",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (frameOk) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.error,
-                    )
-                    Text(
-                        if (a11yOn) "✓ 无障碍开着（抓屏、自动化靠它）"
-                        else "⚠ 无障碍没开，抓屏和自动化用不了。点这里去开",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (a11yOn) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.error,
-                        modifier = if (a11yOn) Modifier else Modifier.clickable {
-                            startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        },
-                    )
-                    // 「检测链接」：检测有没有连上 LSPosed（用户说的主页上半部分保留的功能）
-                    var linkCheck by remember { mutableStateOf("") }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            // ---------- 状态区：左边大卡（激活状态+版本）+ 右边两个小卡（已启用规则/今日拦截）----------
+            val frameOk = CfgPush.bound
+            val services = android.provider.Settings.Secure.getString(
+                contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            ) ?: ""
+            val a11yOn = services.contains(packageName)
+            val enabled = allRules.count { it.enabled }
+            val todayCount = rows.size
+            val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // 左边大卡：激活状态 + 版本 + 对勾
+                Card(Modifier.weight(1.15f).height(170.dp)) {
+                    Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text(
-                            "命中记录 ${rows.size} 条",
+                            if (frameOk) "已激活" else "未激活",
+                            fontWeight = FontWeight.Bold,
+                            color = if (frameOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            "软件版本：$ver",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
                         )
-                        Button(onClick = {
-                            linkCheck = "检测中…"
-                            // 重新绑一次框架服务，bind 成功会推配置
-                            CfgPush.bind(this@MainActivity) {
-                                linkCheck = "已连上 LSPosed（框架正常）"
-                                pushRulesAsync()
-                            }
-                            // 3 秒后还没连上就直说（用 Handler，不依赖协程）
-                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                if (!CfgPush.bound) linkCheck = "连不上 —— 去 LSPosed 里确认「无扰」已启用并勾选作用域"
-                            }, 3000)
-                        }) {
-                            Icon(Icons.Default.Link, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("检测链接")
-                        }
-                    }
-                    if (linkCheck.isNotEmpty()) {
-                        Text(
-                            linkCheck,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (linkCheck.startsWith("已连上")) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { tabState = 1 }) {
-                            Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("抓规则")
-                        }
-                        Button(onClick = { tabState = 2 }) {
-                            Icon(Icons.Default.Download, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("同步")
-                        }
-                    }
-                    // 一键全停：出问题时要能立刻停手，不该藏在设置页里翻
-                    var paused by remember { mutableStateOf(prefs().getString(Cfg.KEY_PAUSED, null) == "true") }
-                    Button(
-                        onClick = {
-                            paused = !paused
-                            prefs().edit().putString(Cfg.KEY_PAUSED, if (paused) "true" else "false").apply()
-                            pushRulesAsync()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
+                        Spacer(Modifier.weight(1f))
                         Icon(
-                            if (paused) Icons.Default.PlayArrow else Icons.Default.Block,
-                            null,
-                            Modifier.size(18.dp),
+                            if (frameOk) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(52.dp),
+                            tint = if (frameOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (paused) "已全部暂停（点这里恢复）" else "全部暂停")
                     }
                 }
+                // 右边两个小卡：已启用规则 / 今日拦截
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Card(Modifier.fillMaxWidth().height(79.dp)) {
+                        Column(Modifier.fillMaxSize().padding(12.dp)) {
+                            Text("已启用规则", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$enabled", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Card(Modifier.fillMaxWidth().height(79.dp)) {
+                        Column(Modifier.fillMaxSize().padding(12.dp)) {
+                            Text("今日拦截", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$todayCount", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // ---------- 警示条：框架没连上 / 无障碍没开 ----------
+            if (!frameOk || !a11yOn) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (!frameOk) "LSPosed 未接入" else "无障碍没开",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            if (!frameOk) "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用"
+                            else "抓屏和自动化用不了。点这里去开：设置 › 无障碍 › 已下载的服务 › 无扰",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = if (frameOk) Modifier.clickable {
+                                startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            } else Modifier,
+                        )
+                    }
+                }
+            }
+
+            // ---------- 信息卡 ----------
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    InfoRow("系统版本", "Android ${android.os.Build.VERSION.RELEASE}")
+                    InfoRow("应用版本", ver ?: "?")
+                    InfoRow("Hook 框架", if (frameOk) "已连接" else "未连接")
+                    InfoRow("规则库", "${allRules.size} 条 · 订阅导入 $subs 条")
+                    InfoRow("设备型号", android.os.Build.MODEL)
+                }
+            }
+
+            // ---------- 常用 ----------
+            SmallTitle("常用")
+            // 一键全停：出问题时要能立刻停手，不该藏在设置页翻
+            var paused by remember { mutableStateOf(prefs().getString(Cfg.KEY_PAUSED, null) == "true") }
+            Button(
+                onClick = {
+                    paused = !paused
+                    prefs().edit().putString(Cfg.KEY_PAUSED, if (paused) "true" else "false").apply()
+                    pushRulesAsync()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(if (paused) Icons.Default.PlayArrow else Icons.Default.Block, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (paused) "已全部暂停（点这里恢复）" else "全部暂停")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { tabState = 1 }) { Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("抓规则") }
+                Button(onClick = { tabState = 2 }) { Icon(Icons.Default.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("同步") }
+            }
+            // 「检测链接」：检测有没有连上 LSPosed
+            var linkCheck by remember { mutableStateOf("") }
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    "命中记录 ${rows.size} 条",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(onClick = {
+                    linkCheck = "检测中…"
+                    CfgPush.bind(this@MainActivity) {
+                        linkCheck = "已连上 LSPosed（框架正常）"
+                        pushRulesAsync()
+                    }
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        if (!CfgPush.bound) linkCheck = "连不上 —— 去 LSPosed 里确认「无扰」已启用并勾选作用域"
+                    }, 3000)
+                }) { Icon(Icons.Default.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("检测链接") }
+            }
+            if (linkCheck.isNotEmpty()) {
+                Text(
+                    linkCheck,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (linkCheck.startsWith("已连上")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1482,10 +1539,41 @@ item {
             }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-        SmallTitle("关于")
+        SmallTitle("外观")
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    floatingBar = !floatingBar
+                    prefs().edit().putBoolean("floating_bar", floatingBar).apply()
+                },
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Tune, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("悬浮底栏")
+                    Text(
+                        "关掉后变成贴底的整条底栏",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = floatingBar, onCheckedChange = {
+                    floatingBar = it
+                    prefs().edit().putBoolean("floating_bar", it).apply()
+                })
+            }
+
+            SmallTitle("关于")
             val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
+            Text("无扰 $ver")
             Text(
-                "无扰 $ver —— 只自用，不分发。",
+                "从 AdHammer（原「大圣净化」，原作者已停更失联）逆向复刻并重写，" +
+                    "规则来源改成开放的订阅制（GKD、域名表）。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "项目：github.com/wangershu/wurao · 只自用，不分发",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1680,5 +1768,14 @@ private fun timeAgo(ms: Long): String {
         d < 86_400_000 -> "${d / 3_600_000} 小时前"
         d < 7 * 86_400_000L -> "${d / 86_400_000} 天前"
         else -> java.text.SimpleDateFormat("M月d日", java.util.Locale.CHINA).format(java.util.Date(ms))
+    }
+}
+
+/** 信息卡的一行：标签 + 值（旧版主页下半部分那种列）。 */
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Column {
+        Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+        Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
