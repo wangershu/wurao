@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 应用列表：MIUI / HyperOS 自己加的运行时权限。
          只声明上一颗时，HyperOS 上 getInstalledPackages() 只返回自己这一个包。 -->
@@ -56,5 +57,8 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/snapshot_service_config" />
         </service>
+            <service
+            android:name=".assist.FloatService"
+            android:exported="false" />
     </application>
 </manifest>

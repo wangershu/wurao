@@ -53,10 +53,13 @@ class FrameOverlay(
         for (p in picks) {
             val r = p.bounds
             if (r.width() <= 0 || r.height() <= 0) continue
-            c.drawRect(r, fill)
+            // 只画描边，不填充 —— 填充会盖住目标 App，根本看不清框的是哪个控件
             c.drawRect(r, box)
-            val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
-            c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
+            // 名字只在选中的那个上画（满屏都是名字就看不清了）
+            if (p === selected) {
+                val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
+                c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
+            }
         }
         // 选中的那个高亮
         selected?.let { p ->

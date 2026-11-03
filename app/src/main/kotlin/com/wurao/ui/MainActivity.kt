@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Tune
@@ -822,6 +823,50 @@ class MainActivity : ComponentActivity() {
             }
 
             SmallTitle("常用")
+            // 悬浮球：一个小胶囊贴在屏幕边缘，随时点一下就开启抓屏
+            var floatOn by remember { mutableStateOf(prefs().getBoolean("float_ball", false)) }
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    val on = !floatOn
+                    floatOn = on
+                    prefs().edit().putBoolean("float_ball", on).apply()
+                    if (on) {
+                        // 悬浮窗权限：没有就去要
+                        if (android.os.Build.VERSION.SDK_INT >= 23 && !android.provider.Settings.canDrawOverlays(this@MainActivity)) {
+                            startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+                        } else {
+                            startService(android.content.Intent(this@MainActivity, com.wurao.assist.FloatService::class.java))
+                        }
+                    } else {
+                        stopService(android.content.Intent(this@MainActivity, com.wurao.assist.FloatService::class.java))
+                    }
+                },
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.RadioButtonChecked, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("悬浮球", fontWeight = FontWeight.Bold)
+                    Text(
+                        "一个小胶囊贴在屏幕边缘，随时点一下就开启抓屏（不用回应用里）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = floatOn, onCheckedChange = { on ->
+                    floatOn = on
+                    prefs().edit().putBoolean("float_ball", on).apply()
+                    if (on) {
+                        if (android.os.Build.VERSION.SDK_INT >= 23 && !android.provider.Settings.canDrawOverlays(this@MainActivity)) {
+                            startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+                        } else {
+                            startService(android.content.Intent(this@MainActivity, com.wurao.assist.FloatService::class.java))
+                        }
+                    } else {
+                        stopService(android.content.Intent(this@MainActivity, com.wurao.assist.FloatService::class.java))
+                    }
+                })
+            }
             // 无障碍服务（旧版「常用」里的一项）：开关状态 + 没开时点去开
             Row(
                 Modifier.fillMaxWidth().clickable {

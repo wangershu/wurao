@@ -114,7 +114,7 @@ class SnapshotService : AccessibilityService() {
     override fun onInterrupt() {}
 
     /** 遍历当前窗口。 */
-    private fun captureNow(): List<Pick> {
+    fun captureNow(): List<Pick> {
         val root = runCatching { rootInActiveWindow }.getOrNull() ?: return emptyList()
         val out = ArrayList<Pick>()
         val pkg = lastPkg
