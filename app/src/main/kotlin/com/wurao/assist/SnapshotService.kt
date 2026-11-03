@@ -96,8 +96,8 @@ class SnapshotService : AccessibilityService() {
         // 不用再切回我们的界面去点按钮
         val shot = lastSnapshot
         if (!shot.isNullOrEmpty()) {
-            FrameOverlay.show(this, shot) { pick ->
-                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = com.wurao.core.model.Act.HIDE)
+            FrameOverlay.show(this, shot) { pick, act ->
+                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = act)
                 val store = com.wurao.core.store.RuleStore
                 rules.forEach { store.upsert(it) }
                 com.wurao.ui.CfgPush.flush(this)

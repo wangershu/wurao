@@ -21,7 +21,7 @@ import android.widget.Toast
 class FrameOverlay(
     private val ctx: Context,
     private val picks: List<SnapshotService.Pick>,
-    private val onPick: (SnapshotService.Pick) -> Unit,
+    private val onPick: (SnapshotService.Pick, com.wurao.core.model.Act) -> Unit,
 ) : View(ctx) {
 
     private val box = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -155,7 +155,7 @@ class FrameOverlay(
         private var current: FrameOverlay? = null
 
         /** 显示控件框。 */
-        fun show(ctx: Context, picks: List<SnapshotService.Pick>, onPick: (SnapshotService.Pick) -> Unit): Boolean {
+        fun show(ctx: Context, picks: List<SnapshotService.Pick>, onPick: (SnapshotService.Pick, com.wurao.core.model.Act) -> Unit): Boolean {
             if (picks.isEmpty()) return false
             hide(ctx)
             val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return false
