@@ -49,6 +49,8 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import androidx.compose.material3.MaterialTheme
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Switch
@@ -637,14 +639,15 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 bottomBar = {
-                    NavigationBar {
+                    // 旧版底栏是悬浮胶囊（FloatingNavigationBar），不是贴底的一条
+                    FloatingNavigationBar {
                         val items = listOf(
                             "主页" to Icons.Default.Assessment,
                             "应用" to Icons.Default.Apps,
                             "设置" to Icons.Default.Settings,
                         )
                         items.forEachIndexed { i, (title, vec) ->
-                            NavigationBarItem(
+                            FloatingNavigationBarItem(
                                 selected = tab == i && detailPkg == null,
                                 onClick = { tab = i; tabState = i; openPkg = null },
                                 icon = vec,
