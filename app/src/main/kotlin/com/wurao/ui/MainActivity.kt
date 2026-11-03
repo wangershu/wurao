@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -731,7 +732,13 @@ class MainActivity : ComponentActivity() {
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 // 左边大卡：激活状态 + 版本 + 对勾
-                Card(Modifier.weight(1.15f).height(170.dp)) {
+                Card(
+                    Modifier.weight(1.15f).height(170.dp),
+                    colors = CardDefaults.defaultColors(
+                        color = if (frameOk) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text(
                             if (frameOk) "已激活" else "未激活",
@@ -771,12 +778,18 @@ class MainActivity : ComponentActivity() {
 
             // ---------- 警示条：框架没连上 / 无障碍没开 ----------
             if (!frameOk || !a11yOn) {
-                Card(Modifier.fillMaxWidth()) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.defaultColors(
+                        color = androidx.compose.ui.graphics.Color(0xFFFFF3D6),
+                        contentColor = androidx.compose.ui.graphics.Color(0xFF704D00),
+                    ),
+                ) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             if (!frameOk) "LSPosed 未接入" else "无障碍没开",
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error,
+                            color = androidx.compose.ui.graphics.Color(0xFF704D00),
                         )
                         Text(
                             if (!frameOk) "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用"
