@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Delete
@@ -61,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -724,11 +726,40 @@ class MainActivity : ComponentActivity() {
                             startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         },
                     )
-                    Text(
-                        "命中记录 ${rows.size} 条",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // 「检测链接」：检测有没有连上 LSPosed（用户说的主页上半部分保留的功能）
+                    var linkCheck by remember { mutableStateOf("") }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(
+                            "命中记录 ${rows.size} 条",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(onClick = {
+                            linkCheck = "检测中…"
+                            // 重新绑一次框架服务，bind 成功会推配置
+                            CfgPush.bind(this@MainActivity) {
+                                linkCheck = "已连上 LSPosed（框架正常）"
+                                pushRulesAsync()
+                            }
+                            // 3 秒后还没连上就直说（用 Handler，不依赖协程）
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                if (!CfgPush.bound) linkCheck = "连不上 —— 去 LSPosed 里确认「无扰」已启用并勾选作用域"
+                            }, 3000)
+                        }) {
+                            Icon(Icons.Default.Link, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("检测链接")
+                        }
+                    }
+                    if (linkCheck.isNotEmpty()) {
+                        Text(
+                            linkCheck,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (linkCheck.startsWith("已连上")) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { tabState = 1 }) {
                             Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp))
