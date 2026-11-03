@@ -5,220 +5,233 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
+import com.wurao.core.model.Act
 
 /**
- * 控件框：**把抓到的控件直接框在目标界面上，点哪个选哪个**（照 GKD 那套）。
- *
- * 之前做成"列一张清单让你挑"，问题是清单里前几屏全是外层容器（没文本没 id），
- * 你根本不知道自己点的是什么。框在当前界面上就没有这个歧义。
- *
- * 用无障碍服务的 `TYPE_ACCESSIBILITY_OVERLAY` 画 —— 不需要悬浮窗权限。
+ * 框选 overlay：照抄旧版 Inspector 的设计。
+ * - FrameView 画框：细框按索引取色，选中后其余压暗，悬停十字准星
+ * - 把手可拖动：「拖动挪开 · 点一下收起」，把手里有「退出」和「回到底部」
+ * - 退出按钮在把手里（不遮挡点选）
  */
-class FrameOverlay(
-    private val ctx: Context,
-    private val picks: List<SnapshotService.Pick>,
-    private val onPick: (SnapshotService.Pick, com.wurao.core.model.Act) -> Unit,
-) : View(ctx) {
+object FrameOverlay {
 
-    private val box = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-        color = Color.argb(200, 255, 87, 34)
-    }
-    private val fill = Paint().apply {
-        style = Paint.Style.FILL
-        color = Color.argb(28, 255, 87, 34)
-    }
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = 22f
-        setShadowLayer(3f, 1f, 1f, Color.BLACK)
-    }
-    private val bar = Paint().apply { color = Color.argb(235, 28, 28, 30) }
-    private val barBtn = Paint().apply { color = Color.argb(255, 103, 80, 164) }
-    private val barBtnCancel = Paint().apply { color = Color.argb(120, 90, 90, 95) }
-    private val barText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 28f }
+    private var wm: WindowManager? = null
+    private var root: FrameLayout? = null
 
-    /** 当前选中的控件（点了之后不是立刻存，先在底栏给建议）。 */
-    private var selected: SnapshotService.Pick? = null
-    private val suggest: Triple<String, String, com.wurao.core.model.Act>?
-        get() = selected?.let { suggestFor(it) }
-
-    private val palette = intArrayOf(
-        0xFF67B0FF.toInt(), 0xFFFF8A65.toInt(), 0xFF81C784.toInt(), 0xFFBA68C8.toInt(),
-        0xFF4DD0E1.toInt(), 0xFFFFD54F.toInt(),
-    )
-    private var touchX = -1f
-    private var touchY = -1f
-
-    override fun onDraw(c: Canvas) {
-        super.onDraw(c)
-        // 细框 + 按深度取色；选中一个之后，其余框压暗（不然几十个框看不出选的是哪个）
-        val dim = selected != null
-        picks.forEachIndexed { idx, p ->
-            if (p === selected) return@forEachIndexed
-            val r = p.bounds
-            if (r.width() <= 0 || r.height() <= 0) return@forEachIndexed
-            val col = palette[idx % palette.size]
-            c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 2f
-                color = col
-                alpha = if (dim) 0x46 else 0xC8
-            })
+    fun show(ctx: Context, picks: List<SnapshotService.Pick>, onPick: (SnapshotService.Pick, Act) -> Unit) {
+        if (picks.isEmpty()) {
+            Toast.makeText(ctx, "没抓到控件", Toast.LENGTH_SHORT).show()
+            return
         }
-        // 悬停高亮（跟随手指）：用户能确认「我现在点的是这儿」
-        if (touchX >= 0f) {
-            pickAt(touchX.toInt(), touchY.toInt())?.let { p ->
-                c.drawRect(p.bounds, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE; strokeWidth = 3f; color = 0xFF8A8A8A.toInt()
-                })
+        hide(ctx)
+        val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        wm = w
+
+        val frame = FrameView(ctx, picks, onPick)
+        val r = FrameLayout(ctx)
+        r.addView(frame, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        // 提示框：可拖动把手 + 内容（建议 + 按建议做/取消），默认贴底
+        val wrap = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        val handle = dragHandle(ctx, wrap)
+        wrap.addView(handle)
+        val content = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        wrap.addView(content)
+        frame.panelContent = content
+
+        val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+        lp.setMargins(dp(ctx, 10), 0, dp(ctx, 10), dp(ctx, 16))
+        r.addView(wrap, lp)
+
+        val wlp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        )
+        runCatching { w.addView(r, wlp); root = r }
+    }
+
+    fun hide(ctx: Context) {
+        root?.let { runCatching { wm?.removeView(it) } }
+        root = null
+    }
+
+    private fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density).toInt()
+
+    /** 把手：可拖动（挪开 / 回到底部），里面有「退出」和「回到底部」。照抄旧版。 */
+    private fun dragHandle(ctx: Context, host: View): View {
+        val bar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(ctx, 14).toFloat()
+                setColor(0xE61C1C1E.toInt())
             }
-            c.drawLine(touchX - 20, touchY, touchX + 20, touchY, label)
-            c.drawLine(touchX, touchY - 20, touchX, touchY + 20, label)
+            setPadding(dp(ctx, 12), dp(ctx, 7), dp(ctx, 8), dp(ctx, 5))
         }
-        // 选中的那个高亮 + 名字
-        selected?.let { p ->
-            c.drawRect(p.bounds, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE; strokeWidth = 4f; color = 0xFF6750A4.toInt()
-            })
-            val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
-            c.drawText(name.take(18), p.bounds.left.toFloat() + 4, p.bounds.top.toFloat() + 22, label)
+        val grip = TextView(ctx).apply {
+            text = "⠿  拖动挪开 · 点一下收起"
+            textSize = 11f
+            setTextColor(0xFF9A9A9A.toInt())
         }
+        bar.addView(grip, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bar.addView(chip(ctx, "回到底部") {
+            host.animate().translationX(0f).translationY(0f).setDuration(200).start()
+        })
+        bar.addView(chip(ctx, "退出", primary = true) { hide(ctx) })
 
-        // 右上角退出
-        c.drawRect(width - 130f, 40f, width - 16f, 130f, bar)
-        c.drawText("× 退出", width - 112f, 105f, barText)
-
-        // 底栏（建议 + 按建议做 / 取消）
-        val barH = if (selected != null) 190 else 120
-        val top = (height - barH).toFloat()
-        c.drawRect(0f, top, width.toFloat(), height.toFloat(), bar)
-        val sg = suggest
-        val act = sg?.first
-        val why = sg?.second
-        if (selected == null) {
-            c.drawText("点一个控件选中它；点右上角退出", 32f, top + 55f, barText)
-        } else {
-            c.drawText("建议：$act —— $why", 32f, top + 55f, barText)
-            val w = width.toFloat()
-            c.drawRect(w * 0.42f, top + 90f, w * 0.72f, top + 160f, barBtn)
-            c.drawRect(w * 0.75f, top + 90f, w * 0.97f, top + 160f, barBtnCancel)
-            c.drawText("按建议做", w * 0.50f, top + 134f, barText)
-            c.drawText("取消", w * 0.83f, top + 134f, barText)
+        var lastX = 0f; var lastY = 0f; var baseX = 0f; var baseY = 0f; var moved = false
+        val slop = dp(ctx, 4).toFloat()
+        bar.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastX = e.rawX; lastY = e.rawY
+                    baseX = host.translationX; baseY = host.translationY
+                    moved = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - lastX; val dy = e.rawY - lastY
+                    if (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop) moved = true
+                    host.translationX = baseX + dx
+                    host.translationY = baseY + dy
+                    true
+                }
+                else -> true
+            }
         }
+        return bar
     }
 
-    override fun onTouchEvent(e: MotionEvent): Boolean {
-        // 记录手指位置（画十字准星），抬起时清空
-        touchX = e.x; touchY = e.y
-        if (e.action == MotionEvent.ACTION_UP) { touchX = -1f; touchY = -1f }
-        invalidate()
-        if (e.action != MotionEvent.ACTION_UP) return true
-        val x = e.x
-        val y = e.y
-        // 右上角退出
-        if (x >= width - 120 && y <= 120) {
-            hide(ctx)
-            return true
+    private fun chip(ctx: Context, text: String, primary: Boolean = false, onClick: () -> Unit): View {
+        val v = TextView(ctx).apply {
+            this.text = text
+            textSize = 12f
+            setTextColor(if (primary) Color.WHITE else 0xFFCCCCCC.toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = dp(ctx, 10).toFloat()
+                setColor(if (primary) 0xFF6750A4.toInt() else 0x33000000)
+            }
+            setPadding(dp(ctx, 12), dp(ctx, 6), dp(ctx, 12), dp(ctx, 6))
+            setOnClickListener { onClick() }
         }
-        val sel = selected
-        if (sel != null) {
-            val barH = 190
-            val top = height - barH
-            if (y >= top) {
-                val w = width.toFloat()
-                if (x >= w * 0.42f && x <= w * 0.72f) {
-                    // 按建议做：用建议的动作（点掉/藏起来），不是固定隐藏
-                    val act = suggestFor(sel).third
-                    onPick(sel, act)
-                    return true
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.marginEnd = dp(ctx, 8)
+        v.layoutParams = lp
+        return v
+    }
+
+    /** 画框的 View：细框按索引取色、选中压暗、悬停十字准星、名字只在选中时画。照抄旧版。 */
+    private class FrameView(
+        ctx: Context,
+        private val picks: List<SnapshotService.Pick>,
+        private val onPick: (SnapshotService.Pick, Act) -> Unit,
+    ) : View(ctx) {
+
+        var panelContent: LinearLayout? = null
+        private var selected: SnapshotService.Pick? = null
+        private var touchX = -1f
+        private var touchY = -1f
+
+        private val palette = intArrayOf(
+            0xFF67B0FF.toInt(), 0xFFFF8A65.toInt(), 0xFF81C784.toInt(), 0xFFBA68C8.toInt(),
+            0xFF4DD0E1.toInt(), 0xFFFFD54F.toInt(),
+        )
+        private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2f }
+        private val selStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 4f; color = 0xFF6750A4.toInt() }
+        private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 22f; setShadowLayer(3f, 1f, 1f, Color.BLACK) }
+
+        override fun onDraw(c: Canvas) {
+            super.onDraw(c)
+            val dim = selected != null
+            picks.forEachIndexed { idx, p ->
+                if (p === selected) return@forEachIndexed
+                val r = p.bounds
+                if (r.width() <= 0 || r.height() <= 0) return@forEachIndexed
+                stroke.color = palette[idx % palette.size]
+                stroke.alpha = if (dim) 0x46 else 0xC8
+                c.drawRect(r, stroke)
+            }
+            if (touchX >= 0f) {
+                pickAt(touchX.toInt(), touchY.toInt())?.let { p ->
+                    c.drawRect(p.bounds, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.STROKE; strokeWidth = 3f; color = 0xFF8A8A8A.toInt()
+                    })
                 }
-                if (x >= w * 0.75f) {
-                    selected = null
-                    invalidate()
-                    return true
-                }
+                c.drawLine(touchX - 20, touchY, touchX + 20, touchY, label)
+                c.drawLine(touchX, touchY - 20, touchX, touchY + 20, label)
+            }
+            selected?.let { p ->
+                c.drawRect(p.bounds, selStroke)
+                val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
+                c.drawText(name.take(18), p.bounds.left.toFloat() + 4, p.bounds.top.toFloat() + 22, label)
+            }
+        }
+
+        private fun pickAt(x: Int, y: Int): SnapshotService.Pick? =
+            picks.reversed().firstOrNull { it.bounds.contains(x, y) }
+
+        private fun suggestFor(p: SnapshotService.Pick): Triple<String, String, Act> {
+            val txt = p.node.text ?: p.node.desc ?: ""
+            val skipLike = txt.contains("跳过") || txt.contains("关闭") || txt.contains("Skip", true) || txt.contains("跳过广告")
+            return if (skipLike) Triple("点掉", "文案里写着『$txt』，像是要你点的那种", Act.CLICK)
+            else Triple("藏起来", "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）", Act.HIDE)
+        }
+
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            touchX = e.x; touchY = e.y
+            if (e.action == MotionEvent.ACTION_UP) { touchX = -1f; touchY = -1f }
+            invalidate()
+            if (e.action != MotionEvent.ACTION_UP) return true
+            val hit = pickAt(e.x.toInt(), e.y.toInt())
+            if (hit == null) {
+                selected = null
+                panelContent?.removeAllViews()
+                invalidate()
                 return true
             }
-        }
-
-        val hit = pickAt(x.toInt(), y.toInt())
-        if (hit == null) {
-            // 点空白处 = 取消。不给退路的话框会一直盖在人家界面上，你连退都退不掉
-            Toast.makeText(ctx, "已取消", Toast.LENGTH_SHORT).show()
-            hide(ctx)
+            selected = hit
+            showSuggest(hit)
+            invalidate()
             return true
         }
-        // 选中，但**不立刻存** —— 先在底栏给一句建议和理由，让你确认
-        selected = hit
-        invalidate()
-        return true
-    }
 
-    /** 给一句人话建议 + 理由 + 建议动作（旧版的做法，别让人盲选动作）。 */
-    private fun suggestFor(p: SnapshotService.Pick): Triple<String, String, com.wurao.core.model.Act> {
-        val txt = p.node.text ?: p.node.desc ?: ""
-        val skipLike = txt.contains("跳过") || txt.contains("关闭") || txt.contains("Skip", true) ||
-            txt.contains("跳过广告")
-        return if (skipLike) {
-            Triple("点掉", "文案里写着『$txt』，像是要你点的那种", com.wurao.core.model.Act.CLICK)
-        } else {
-            Triple("藏起来", "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）", com.wurao.core.model.Act.HIDE)
-        }
-    }
-
-    /** 命中的控件：取包含该点且面积最小的那个（最靠里的那个才是你看到的）。 */
-    private fun pickAt(x: Int, y: Int): SnapshotService.Pick? {
-        var best: SnapshotService.Pick? = null
-        var bestArea = Int.MAX_VALUE
-        for (p in picks) {
-            val r = p.bounds
-            if (r.width() <= 0 || r.height() <= 0) continue
-            if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue
-            val area = r.width() * r.height()
-            if (area < bestArea) {
-                bestArea = area
-                best = p
-            }
-        }
-        return best
-    }
-
-    companion object {
-        private var current: FrameOverlay? = null
-
-        /** 显示控件框。 */
-        fun show(ctx: Context, picks: List<SnapshotService.Pick>, onPick: (SnapshotService.Pick, com.wurao.core.model.Act) -> Unit): Boolean {
-            if (picks.isEmpty()) return false
-            hide(ctx)
-            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return false
-            val v = FrameOverlay(ctx, picks, onPick)
-            val lp = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT
-            )
-            return runCatching {
-                wm.addView(v, lp)
-                current = v
-                true
-            }.getOrDefault(false)
-        }
-
-        fun hide(ctx: Context) {
-            val v = current ?: return
-            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-            runCatching { wm.removeView(v) }
-            current = null
+        private fun showSuggest(p: SnapshotService.Pick) {
+            val content = panelContent ?: return
+            content.removeAllViews()
+            val ctx = content.context
+            val (act, why, actEnum) = suggestFor(p)
+            content.addView(TextView(ctx).apply {
+                text = "建议：$act —— $why"
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 6))
+            })
+            val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+            btnRow.addView(chip(ctx, "按建议做", primary = true) {
+                onPick(p, actEnum)
+                FrameOverlay.hide(ctx)
+            })
+            btnRow.addView(chip(ctx, "取消") {
+                selected = null
+                content.removeAllViews()
+                invalidate()
+            })
+            content.addView(btnRow)
         }
     }
 }

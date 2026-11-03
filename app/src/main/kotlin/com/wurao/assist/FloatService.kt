@@ -37,14 +37,14 @@ class FloatService : Service() {
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val v = TextView(this).apply {
             text = "框"
-            textSize = 18f
+            textSize = 22f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 cornerRadius = 999f
                 setColor(Color.argb(210, 30, 30, 34))
             }
-            setPadding(32, 20, 32, 20)
+            setPadding(40, 26, 40, 26)
         }
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
