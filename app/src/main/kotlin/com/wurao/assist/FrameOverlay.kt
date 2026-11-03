@@ -48,31 +48,53 @@ class FrameOverlay(
     private val suggest: Triple<String, String, com.wurao.core.model.Act>?
         get() = selected?.let { suggestFor(it) }
 
+    private val palette = intArrayOf(
+        0xFF67B0FF.toInt(), 0xFFFF8A65.toInt(), 0xFF81C784.toInt(), 0xFFBA68C8.toInt(),
+        0xFF4DD0E1.toInt(), 0xFFFFD54F.toInt(),
+    )
+    private var touchX = -1f
+    private var touchY = -1f
+
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
-        for (p in picks) {
+        // 细框 + 按深度取色；选中一个之后，其余框压暗（不然几十个框看不出选的是哪个）
+        val dim = selected != null
+        picks.forEachIndexed { idx, p ->
+            if (p === selected) return@forEachIndexed
             val r = p.bounds
-            if (r.width() <= 0 || r.height() <= 0) continue
-            // 只画描边，不填充 —— 填充会盖住目标 App，根本看不清框的是哪个控件
-            c.drawRect(r, box)
-            // 名字只在选中的那个上画（满屏都是名字就看不清了）
-            if (p === selected) {
-                val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
-                c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
-            }
-        }
-        // 右上角退出（点空白取消太隐蔽了，给个明确的退出）
-        c.drawRect(width - 120f, 40f, width - 16f, 120f, bar)
-        c.drawText("× 退出", width - 110f, 100f, barText)
-
-        // 选中的那个高亮
-        selected?.let { p ->
-            val r = p.bounds
-            c.drawRect(r, Paint().apply {
-                style = Paint.Style.STROKE; strokeWidth = 4f; color = Color.argb(255, 103, 80, 164)
+            if (r.width() <= 0 || r.height() <= 0) return@forEachIndexed
+            val col = palette[idx % palette.size]
+            c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                color = col
+                alpha = if (dim) 0x46 else 0xC8
             })
         }
+        // 悬停高亮（跟随手指）：用户能确认「我现在点的是这儿」
+        if (touchX >= 0f) {
+            pickAt(touchX.toInt(), touchY.toInt())?.let { p ->
+                c.drawRect(p.bounds, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE; strokeWidth = 3f; color = 0xFF8A8A8A.toInt()
+                })
+            }
+            c.drawLine(touchX - 20, touchY, touchX + 20, touchY, label)
+            c.drawLine(touchX, touchY - 20, touchX, touchY + 20, label)
+        }
+        // 选中的那个高亮 + 名字
+        selected?.let { p ->
+            c.drawRect(p.bounds, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeWidth = 4f; color = 0xFF6750A4.toInt()
+            })
+            val name = p.node.text ?: p.node.desc ?: p.node.vid ?: p.node.className.substringAfterLast('.')
+            c.drawText(name.take(18), p.bounds.left.toFloat() + 4, p.bounds.top.toFloat() + 22, label)
+        }
 
+        // 右上角退出
+        c.drawRect(width - 130f, 40f, width - 16f, 130f, bar)
+        c.drawText("× 退出", width - 112f, 105f, barText)
+
+        // 底栏（建议 + 按建议做 / 取消）
         val barH = if (selected != null) 190 else 120
         val top = (height - barH).toFloat()
         c.drawRect(0f, top, width.toFloat(), height.toFloat(), bar)
@@ -80,7 +102,7 @@ class FrameOverlay(
         val act = sg?.first
         val why = sg?.second
         if (selected == null) {
-            c.drawText("点一个控件选中它，点没有控件的空白处取消", 32f, top + 55f, barText)
+            c.drawText("点一个控件选中它；点右上角退出", 32f, top + 55f, barText)
         } else {
             c.drawText("建议：$act —— $why", 32f, top + 55f, barText)
             val w = width.toFloat()
@@ -92,6 +114,10 @@ class FrameOverlay(
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        // 记录手指位置（画十字准星），抬起时清空
+        touchX = e.x; touchY = e.y
+        if (e.action == MotionEvent.ACTION_UP) { touchX = -1f; touchY = -1f }
+        invalidate()
         if (e.action != MotionEvent.ACTION_UP) return true
         val x = e.x
         val y = e.y
