@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +47,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.height
 import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.material3.Icon
@@ -720,7 +727,7 @@ class MainActivity : ComponentActivity() {
         val recent = rows.size
 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // ---------- 状态区：左边大卡（激活状态+版本）+ 右边两个小卡（已启用规则/今日拦截）----------
+            // ---------- 状态区（照抄旧版：左边方形大卡 + 右边两个小卡）----------
             val frameOk = CfgPush.bound
             val services = android.provider.Settings.Secure.getString(
                 contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
@@ -728,74 +735,33 @@ class MainActivity : ComponentActivity() {
             val a11yOn = services.contains(packageName)
             val enabled = allRules.count { it.enabled }
             val todayCount = rows.size
-            val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
+            val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?") ?: "?"
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 左边大卡：激活状态 + 版本 + 对勾
-                Card(
-                    Modifier.weight(1.15f).height(170.dp),
-                    colors = CardDefaults.defaultColors(
-                        color = if (frameOk) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.errorContainer,
-                    ),
+                StatusCard(active = frameOk, version = ver, modifier = Modifier.weight(1f).aspectRatio(1f))
+                Column(
+                    Modifier.weight(1f).aspectRatio(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text(
-                            if (frameOk) "已激活" else "未激活",
-                            fontWeight = FontWeight.Bold,
-                            color = if (frameOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            "软件版本：$ver",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.weight(1f))
-                        Icon(
-                            if (frameOk) Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            modifier = Modifier.size(52.dp),
-                            tint = if (frameOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-                // 右边两个小卡：已启用规则 / 今日拦截
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Card(Modifier.fillMaxWidth().height(79.dp)) {
-                        Column(Modifier.fillMaxSize().padding(12.dp)) {
-                            Text("已启用规则", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("$enabled", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Card(Modifier.fillMaxWidth().height(79.dp)) {
-                        Column(Modifier.fillMaxSize().padding(12.dp)) {
-                            Text("今日拦截", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("$todayCount", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    StatCard(title = "已启用规则", value = "$enabled", modifier = Modifier.weight(1f)) { tabState = 1 }
+                    StatCard(title = "今日拦截", value = "$todayCount", modifier = Modifier.weight(1f)) { }
                 }
             }
 
-            // ---------- 警示条：框架没连上 / 无障碍没开 ----------
             if (!frameOk || !a11yOn) {
                 Card(
                     Modifier.fillMaxWidth(),
-                    colors = CardDefaults.defaultColors(
-                        color = androidx.compose.ui.graphics.Color(0xFFFFF3D6),
-                        contentColor = androidx.compose.ui.graphics.Color(0xFF704D00),
-                    ),
+                    colors = CardDefaults.defaultColors(color = WARN_BG, contentColor = WARN_FG),
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             if (!frameOk) "LSPosed 未接入" else "无障碍没开",
-                            fontWeight = FontWeight.Bold,
-                            color = androidx.compose.ui.graphics.Color(0xFF704D00),
+                            fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = WARN_FG,
                         )
                         Text(
                             if (!frameOk) "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用"
                             else "抓屏和自动化用不了。点这里去开：设置 › 无障碍 › 已下载的服务 › 无扰",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 14.sp, color = WARN_FG,
                             modifier = if (frameOk) Modifier.clickable {
                                 startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                             } else Modifier,
@@ -804,20 +770,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // ---------- 信息卡 ----------
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     InfoRow("系统版本", "Android ${android.os.Build.VERSION.RELEASE}")
-                    InfoRow("应用版本", ver ?: "?")
+                    InfoRow("应用版本", ver)
                     InfoRow("Hook 框架", if (frameOk) "已连接" else "未连接")
                     InfoRow("规则库", "${allRules.size} 条 · 订阅导入 $subs 条")
                     InfoRow("设备型号", android.os.Build.MODEL)
                 }
             }
 
-            // ---------- 常用 ----------
             SmallTitle("常用")
-            // 一键全停：出问题时要能立刻停手，不该藏在设置页翻
             var paused by remember { mutableStateOf(prefs().getString(Cfg.KEY_PAUSED, null) == "true") }
             Button(
                 onClick = {
@@ -835,7 +798,6 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = { tabState = 1 }) { Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("抓规则") }
                 Button(onClick = { tabState = 2 }) { Icon(Icons.Default.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("同步") }
             }
-            // 「检测链接」：检测有没有连上 LSPosed
             var linkCheck by remember { mutableStateOf("") }
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text(
@@ -1790,5 +1752,79 @@ private fun InfoRow(label: String, value: String) {
     Column {
         Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
         Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ---------- 照抄旧版的主页卡片（配色值、结构、字号都一样） ----------
+
+private val ACTIVE_COLOR = androidx.compose.ui.graphics.Color(0xFF36D167)
+private val ACTIVE_BG = androidx.compose.ui.graphics.Color(0xFFDFFAE4)
+private val INACTIVE_COLOR = androidx.compose.ui.graphics.Color(0xFFFF5A52)
+private val INACTIVE_BG = androidx.compose.ui.graphics.Color(0xFFFFE5E3)
+private val WARN_BG = androidx.compose.ui.graphics.Color(0xFFFFF3D6)
+private val WARN_FG = androidx.compose.ui.graphics.Color(0xFF704D00)
+
+/** 状态大卡：方形，右下角一个对勾/感叹号水印（照抄旧版）。 */
+@Composable
+private fun StatusCard(active: Boolean, version: String, modifier: Modifier = Modifier) {
+    val color = if (active) ACTIVE_COLOR else INACTIVE_COLOR
+    val background = if (active) ACTIVE_BG else INACTIVE_BG
+    Card(modifier = modifier, colors = CardDefaults.defaultColors(color = background)) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxSize().offset(12.dp, 16.dp),
+                contentAlignment = androidx.compose.ui.Alignment.BottomEnd,
+            ) {
+                OutlineMark(ok = active, tint = color.copy(alpha = 0.78f), size = 110.dp)
+            }
+            Column(Modifier.fillMaxSize().padding(16.dp)) {
+                Text(
+                    text = if (active) "已激活" else "未激活",
+                    fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                    color = androidx.compose.ui.graphics.Color(0xFF101010),
+                )
+                Text(
+                    text = "软件版本：$version",
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    color = if (active) androidx.compose.ui.graphics.Color(0xFF101010) else color,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/** 小统计卡：标题小字 + 数字大字（照抄旧版）。 */
+@Composable
+private fun StatCard(title: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxSize().padding(14.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
+/** 描边对勾/感叹号水印（照抄旧版：激活画对勾，未激活画感叹号 —— 未激活不是错误，是「差一步」）。 */
+@Composable
+private fun OutlineMark(ok: Boolean, tint: androidx.compose.ui.graphics.Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val stroke = this.size.minDimension * 0.062f
+        val r = this.size.minDimension / 2 - stroke / 2
+        drawCircle(color = tint, radius = r, style = Stroke(width = stroke))
+        val path = Path().apply {
+            if (ok) {
+                moveTo(w * 0.295f, h * 0.515f); lineTo(w * 0.445f, h * 0.665f); lineTo(w * 0.715f, h * 0.355f)
+            } else {
+                moveTo(w * 0.5f, h * 0.30f); lineTo(w * 0.5f, h * 0.56f)
+                moveTo(w * 0.5f, h * 0.68f); lineTo(w * 0.5f, h * 0.70f)
+            }
+        }
+        drawPath(path = path, color = tint, style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
     }
 }
