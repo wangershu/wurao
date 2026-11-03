@@ -61,6 +61,10 @@ class FrameOverlay(
                 c.drawText(name.take(18), r.left.toFloat() + 4, r.top.toFloat() + 22, label)
             }
         }
+        // 右上角退出（点空白取消太隐蔽了，给个明确的退出）
+        c.drawRect(width - 120f, 40f, width - 16f, 120f, bar)
+        c.drawText("× 退出", width - 110f, 100f, barText)
+
         // 选中的那个高亮
         selected?.let { p ->
             val r = p.bounds
@@ -91,6 +95,11 @@ class FrameOverlay(
         if (e.action != MotionEvent.ACTION_UP) return true
         val x = e.x
         val y = e.y
+        // 右上角退出
+        if (x >= width - 120 && y <= 120) {
+            hide(ctx)
+            return true
+        }
         val sel = selected
         if (sel != null) {
             val barH = 190
