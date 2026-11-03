@@ -54,14 +54,22 @@ object FrameOverlay {
         lp.setMargins(dp(ctx, 10), 0, dp(ctx, 10), dp(ctx, 16))
         r.addView(wrap, lp)
 
+        // 用 TYPE_ACCESSIBILITY_OVERLAY（无障碍 overlay）—— 坐标系和无障碍的 bounds 一致；
+        // TYPE_APPLICATION_OVERLAY 的坐标系会差一截（状态栏/导航栏偏移），框就对不上
+        val type = if (Build.VERSION.SDK_INT >= 22) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
         val wlp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
-        )
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            if (Build.VERSION.SDK_INT >= 28) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
         runCatching { w.addView(r, wlp); root = r }
     }
 
