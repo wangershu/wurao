@@ -699,8 +699,30 @@ class MainActivity : ComponentActivity() {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("现在靠什么在干活", fontWeight = FontWeight.Bold)
+                    val frameOk = CfgPush.bound
+                    val services = android.provider.Settings.Secure.getString(
+                        contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                    ) ?: ""
+                    val a11yOn = services.contains(packageName)
                     Text(
-                        "规则库 ${allRules.size} 条 · 订阅导入 $subs 条",
+                        if (frameOk) "✓ 框架已接管，规则库 ${allRules.size} 条（订阅 $subs 条）"
+                        else "⚠ 框架服务没连上 —— LSPosed 里确认一下「无扰」已启用，再回来",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (frameOk) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        if (a11yOn) "✓ 无障碍开着（抓屏、自动化靠它）"
+                        else "⚠ 无障碍没开，抓屏和自动化用不了。点这里去开",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (a11yOn) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.error,
+                        modifier = if (a11yOn) Modifier else Modifier.clickable {
+                            startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                    )
+                    Text(
+                        "命中记录 ${rows.size} 条",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -950,6 +972,17 @@ class MainActivity : ComponentActivity() {
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // 点进一个应用，先看它命中的规则 + 开关（旧版 4.3 的结构）
         item { SmallTitle("命中的规则（${hits.size}）") }
+        if (hits.isNotEmpty()) {
+            item {
+                val total = hits.sumOf { it.count }
+                val lastAt = hits.maxOfOrNull { it.lastAtMs } ?: 0L
+                Text(
+                    "这个应用拦过 $total 次，最后一次 ${timeAgo(lastAt)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (hits.isEmpty()) {
             item {
                 EmptyHint(
