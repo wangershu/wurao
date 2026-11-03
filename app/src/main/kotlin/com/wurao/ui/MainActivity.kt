@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Info
@@ -151,6 +153,9 @@ class MainActivity : ComponentActivity() {
 
     /** 主题：跟随系统 / 浅色 / 深色。 */
     private var themeMode by mutableStateOf("system")
+
+    /** 设置页的二级页：appearance（外观）/ about（关于）。 */
+    private var subPage by mutableStateOf<String?>(null)
 
     /** 调试直达要打开的详情页包名（--es open_pkg）。 */
     private var initialPkg: String? = null
@@ -693,6 +698,16 @@ class MainActivity : ComponentActivity() {
             ) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding)) {
                     when {
+                        subPage == "appearance" -> AppearanceScreen(
+                            floatingBar = floatingBar,
+                            onToggleBar = {
+                                floatingBar = it
+                                prefs().edit().putBoolean("floating_bar", it).apply()
+                            },
+                        ) { subPage = null }
+                        subPage == "about" -> AboutScreen(
+                            ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?") ?: "?",
+                        ) { subPage = null }
                         detailPkg != null -> AppDetailScreen(detailPkg, { openPkg = null }) { openPkg = null }
                         tab == 0 -> BoardScreen()
                         tab == 1 -> AppsScreen { openPkg = it }
@@ -750,7 +765,27 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     StatCard(title = "已启用规则", value = "$enabled", modifier = Modifier.weight(1f)) { tabState = 1 }
-                    StatCard(title = "今日拦截", value = "$todayCount", modifier = Modifier.weight(1f)) { }
+                    var showHits by remember { mutableStateOf(false) }
+                    StatCard(title = "今日拦截", value = "$todayCount", modifier = Modifier.weight(1f)) { showHits = true }
+                    if (showHits) {
+                        AlertDialog(
+                            onDismissRequest = { showHits = false },
+                            title = { Text("今日拦截") },
+                            text = {
+                                if (rows.isEmpty()) {
+                                    Text("今天还没拦过任何东西")
+                                } else {
+                                    Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                                        rows.forEach { r ->
+                                            Text("· ${r.describe()}（${r.count} 次，${timeAgo(r.lastAtMs)}）", style = MaterialTheme.typography.bodySmall)
+                                            Spacer(Modifier.height(4.dp))
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = { Button(onClick = { showHits = false }) { Text("知道了") } },
+                        )
+                    }
                 }
             }
 
@@ -1564,21 +1599,14 @@ item {
                 })
             }
 
-            SmallTitle("关于")
-            val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("?")
-            Text("无扰 $ver")
-            Text(
-                "从 AdHammer（原「大圣净化」，原作者已停更失联）逆向复刻并重写，" +
-                    "规则来源改成开放的订阅制（GKD、域名表）。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "项目：github.com/wangershu/wurao · 只自用，不分发",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text("只自用，不分发。风险级能力默认全关，出问题点「全部退回」。")
+            SettingRow(
+                title = "关于",
+                summary = "版本、开发者、项目链接",
+                icon = Icons.Default.Info,
+                expanded = false,
+                onClick = { subPage = "about" },
+            ) { }
+
                 }
             }
         }
@@ -1852,5 +1880,91 @@ private fun OutlineMark(ok: Boolean, tint: androidx.compose.ui.graphics.Color, s
             }
         }
         drawPath(path = path, color = tint, style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+    }
+}
+
+/** 外观二级页（照抄旧版：主题 + 底栏）。 */
+@Composable
+private fun AppearanceScreen(
+    floatingBar: Boolean,
+    onToggleBar: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                Text("外观", fontWeight = FontWeight.Bold)
+            }
+        }
+        item { SmallTitle("主题") }
+        item {
+            Text(
+                "跟随系统（深色/浅色由系统深色模式决定）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item { SmallTitle("底栏") }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { onToggleBar(!floatingBar) }.padding(14.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Tune, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("悬浮底栏")
+                        Text(
+                            "关掉后变成贴底的整条底栏",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = floatingBar, onCheckedChange = { onToggleBar(it) })
+                }
+            }
+        }
+    }
+}
+
+/** 关于二级页（照抄旧版：版本、开发者、项目链接）。 */
+@Composable
+private fun AboutScreen(ver: String, onBack: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                Text("关于", fontWeight = FontWeight.Bold)
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("无扰 $ver", fontWeight = FontWeight.Bold)
+                    Text(
+                        "从 AdHammer（原「大圣净化」，原作者已停更失联）逆向复刻并重写，" +
+                            "规则来源改成开放的订阅制（GKD、域名表）。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        item { SmallTitle("项目") }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("开源仓库", fontWeight = FontWeight.Bold)
+                    Text(
+                        "github.com/wangershu/wurao",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text("只自用，不分发。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
     }
 }
