@@ -160,7 +160,7 @@ object Ui {
     }
 
     /** 跑到后台线程再回主线程报结果（调试直达的导入走这里）。 */
-    fun runInBackground(ctx: Context, work: () -> String) {
+    fun runInBackground(ctx: Context, onDone: (() -> Unit)? = null, work: () -> String) {
         Thread {
             val report = runCatching { work() }.onFailure {
                 Log.w("Wurao", "导入异常: ${it.javaClass.simpleName}: ${it.message}")
@@ -168,6 +168,7 @@ object Ui {
             Handler(Looper.getMainLooper()).post {
                 Log.i("Wurao", "import: $report")
                 Toast.makeText(ctx, report, Toast.LENGTH_LONG).show()
+                onDone?.invoke()
             }
         }.start()
     }
