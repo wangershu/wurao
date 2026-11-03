@@ -726,21 +726,16 @@ class MainActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text(
-                        "命中记录 $recent 条",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { tabState = 1 }) {
                             Icon(Icons.Default.Screenshot, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("抓一条规则")
+                            Text("抓规则")
                         }
                         Button(onClick = { tabState = 2 }) {
                             Icon(Icons.Default.Download, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("同步订阅")
+                            Text("同步")
                         }
                     }
                     // 一键全停：出问题时要能立刻停手，不该藏在设置页里翻
