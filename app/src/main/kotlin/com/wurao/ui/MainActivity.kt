@@ -318,8 +318,8 @@ class MainActivity : ComponentActivity() {
                 finish()
                 return true
             }
-            val ok = com.wurao.assist.FrameOverlay.show(svc, picks) { pick ->
-                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = Act.HIDE)
+            val ok = com.wurao.assist.FrameOverlay.show(svc, picks) { pick, act ->
+                val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = act)
                 rules.forEach { RuleStore.upsert(it) }
                 pushRulesAsync()
                 android.widget.Toast.makeText(

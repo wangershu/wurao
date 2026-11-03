@@ -45,7 +45,7 @@ class FrameOverlay(
 
     /** 当前选中的控件（点了之后不是立刻存，先在底栏给建议）。 */
     private var selected: SnapshotService.Pick? = null
-    private val suggest: Pair<String, String>?
+    private val suggest: Triple<String, String, com.wurao.core.model.Act>?
         get() = selected?.let { suggestFor(it) }
 
     override fun onDraw(c: Canvas) {
@@ -69,7 +69,9 @@ class FrameOverlay(
         val barH = if (selected != null) 190 else 120
         val top = (height - barH).toFloat()
         c.drawRect(0f, top, width.toFloat(), height.toFloat(), bar)
-        val (act, why) = suggest ?: (null to null)
+        val sg = suggest
+        val act = sg?.first
+        val why = sg?.second
         if (selected == null) {
             c.drawText("点一个控件选中它，点没有控件的空白处取消", 32f, top + 55f, barText)
         } else {
