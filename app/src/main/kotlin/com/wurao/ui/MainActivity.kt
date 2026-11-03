@@ -848,7 +848,7 @@ class MainActivity : ComponentActivity() {
         Column(Modifier.padding(16.dp)) {
             Text("应用", fontWeight = FontWeight.Bold)
             Text(note, style = MaterialTheme.typography.bodySmall)
-            ManualPkgEntry(onOpen)
+            // 『包名 + 打开』删了：搜索框已能搜，点开列表项就能进详情
             LazyColumn {
                 // 按命中数排序，每行告诉你这个应用拦了多少（旧版 4.3 的结构）
                 // 注意：这里是 LazyListScope 的 lambda，不能用 remember（不是 @Composable 上下文）；
