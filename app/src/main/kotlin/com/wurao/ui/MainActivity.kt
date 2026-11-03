@@ -3,6 +3,7 @@ package com.wurao.ui
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
@@ -123,6 +125,7 @@ class MainActivity : ComponentActivity() {
         // miuix 组件要从 MiuixTheme 取主题（CompositionLocal），
         // 不包的话一打开就崩 —— 之前就是这么栽的
         floatingBar = prefs().getBoolean("floating_bar", true)
+        // 主题跟随系统（miuix 默认自动跟随），不单独给深色/浅色开关
         setContent { MiuixTheme { WuraoApp() } }
     }
 
@@ -145,6 +148,9 @@ class MainActivity : ComponentActivity() {
 
     /** 底栏悬浮还是贴底（旧版外观设置里的一项）。 */
     private var floatingBar by mutableStateOf(true)
+
+    /** 主题：跟随系统 / 浅色 / 深色。 */
+    private var themeMode by mutableStateOf("system")
 
     /** 调试直达要打开的详情页包名（--es open_pkg）。 */
     private var initialPkg: String? = null
@@ -781,6 +787,26 @@ class MainActivity : ComponentActivity() {
             }
 
             SmallTitle("常用")
+            // 无障碍服务（旧版「常用」里的一项）：开关状态 + 没开时点去开
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.AccessibilityNew, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("无障碍服务", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (a11yOn) "已开启（框架在跑，它只在抓屏时用得上）" else "未开启，抓屏和自动化用不了 —— 点这里去开",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
             var paused by remember { mutableStateOf(prefs().getString(Cfg.KEY_PAUSED, null) == "true") }
             Button(
                 onClick = {
