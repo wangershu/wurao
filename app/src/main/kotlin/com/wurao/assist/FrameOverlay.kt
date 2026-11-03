@@ -93,8 +93,9 @@ class FrameOverlay(
             if (y >= top) {
                 val w = width.toFloat()
                 if (x >= w * 0.42f && x <= w * 0.72f) {
-                    // 按建议做
-                    onPick(sel)
+                    // 按建议做：用建议的动作（点掉/藏起来），不是固定隐藏
+                    val act = suggestFor(sel).third
+                    onPick(sel, act)
                     return true
                 }
                 if (x >= w * 0.75f) {
@@ -119,15 +120,15 @@ class FrameOverlay(
         return true
     }
 
-    /** 给一句人话建议 + 理由（旧版的做法，别让人盲选动作）。 */
-    private fun suggestFor(p: SnapshotService.Pick): Pair<String, String> {
+    /** 给一句人话建议 + 理由 + 建议动作（旧版的做法，别让人盲选动作）。 */
+    private fun suggestFor(p: SnapshotService.Pick): Triple<String, String, com.wurao.core.model.Act> {
         val txt = p.node.text ?: p.node.desc ?: ""
         val skipLike = txt.contains("跳过") || txt.contains("关闭") || txt.contains("Skip", true) ||
             txt.contains("跳过广告")
         return if (skipLike) {
-            "点掉" to "文案里写着『$txt』，像是要你点的那种"
+            Triple("点掉", "文案里写着『$txt』，像是要你点的那种", com.wurao.core.model.Act.CLICK)
         } else {
-            "藏起来" to "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）"
+            Triple("藏起来", "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）", com.wurao.core.model.Act.HIDE)
         }
     }
 

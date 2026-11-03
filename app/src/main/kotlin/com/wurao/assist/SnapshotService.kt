@@ -1,6 +1,11 @@
 package com.wurao.assist
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+
 import android.accessibilityservice.AccessibilityService
+import androidx.core.app.NotificationCompat
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.wurao.core.analyze.RuleGen
@@ -61,6 +66,9 @@ class SnapshotService : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         android.util.Log.i("Wurao", "抓屏服务已连接")
+        // 测试期间保活：前台服务 + 常驻通知，防止系统把服务回收掉
+        // （服务被回收的表现：框出不来、抓取没反应）
+        startKeepaliveNotification()
     }
 
     override fun onDestroy() {
@@ -144,4 +152,24 @@ class SnapshotService : AccessibilityService() {
         vid = n.viewIdResourceName?.substringAfterLast('/'),
         clickable = n.isClickable,
     )
+
+    /** 前台服务 + 常驻通知：防系统回收（测试期间）。 */
+    private fun startKeepaliveNotification() {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 26) {
+                val nm = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.createNotificationChannel(
+                    NotificationChannel("svc", "抓屏服务", NotificationManager.IMPORTANCE_MIN)
+                )
+            }
+            val n = NotificationCompat.Builder(this, "svc")
+                .setSmallIcon(android.R.drawable.ic_notification_overlay)
+                .setContentTitle("无扰正在运行")
+                .setContentText("抓屏 / 自动化的无障碍服务")
+                .setOngoing(true)
+                .build()
+            startForeground(1, n)
+            android.util.Log.i("Wurao", "保活通知已挂")
+        }.onFailure { android.util.Log.w("Wurao", "保活通知挂了（不影响功能）", it) }
+    }
 }

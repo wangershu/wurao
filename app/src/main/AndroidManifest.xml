@@ -5,6 +5,8 @@
     <!-- 应用列表：Android 11+ 的标准要求 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 应用列表：MIUI / HyperOS 自己加的运行时权限。
          只声明上一颗时，HyperOS 上 getInstalledPackages() 只返回自己这一个包。 -->
     <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS"
