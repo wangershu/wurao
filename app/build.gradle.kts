@@ -67,15 +67,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.compose.activity)
     implementation(libs.compose.lifecycle.runtime)
-    // miuix（MIUI 风格）：用本地 aar。UI 对齐大圣净化后升到 0.9.4（与参考实现同版本，
-    // Kotlin 2.4.21 编译已通过；当年「metadata 太新」的注释对应的是旧 Kotlin）。
+    // miuix（MIUI 风格）：用本地 aar。0.9.0（Kotlin 2.2/2.4 都能跑）。
     // 远程坐标这台机器解析不到 —— 别改成远程坐标，会重新拉不到。
-    implementation(files("libs/miuix-ui-android-0.9.4.aar"))
-    implementation(files("libs/miuix-icons-android-0.9.4.aar"))
-    implementation(files("libs/miuix-preference-android-0.9.4.aar"))
-    // miuix 0.9.4 的底层依赖（本地 aar 不读 pom，必须自己补全，否则运行时 ClassNotFound）：
-    // core/shapes 没有 0.9.4 的 aar，沿用 0.9.0（javap 核实过 0.9.4 ui 只用其中的
-    // Utils/SmoothRoundedCornerShape 等稳定 API）。
+    implementation(files("libs/miuix-ui-0.9.0.aar"))
+    implementation(files("libs/miuix-icons-0.9.0.aar"))
+    implementation(files("libs/miuix-preference-0.9.0.aar"))
+    // miuix 的底层依赖（本地 aar 不读 pom，必须自己补全，否则运行时 ClassNotFound）：
     implementation(files("libs/miuix-core-android-0.9.0.aar"))
     implementation(files("libs/miuix-shapes-android-0.9.0.aar"))
     implementation(libs.androidx.core.ktx)
