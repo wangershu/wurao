@@ -1687,61 +1687,11 @@ private fun EmptyHint(
     }
 }
 
-/**
- * 应用图标。取不到就退回一个通用图标 —— 列表中一排灰方块很难看，
- * 有图标一眼就能认出是哪个 App。
- */
-@Composable
-private fun AppIcon(pkg: String) {
-    val ctx = LocalContext.current
-    val bmp = remember(pkg) {
-        runCatching {
-            val d = ctx.packageManager.getApplicationIcon(pkg)
-            // 必须固定小尺寸：应用图标 intrinsic 常常是 512x512，
-            // 按原尺寸建 Bitmap 一个就 1MB，几百个应用直接把内存吃满
-            // （实测堆到 240MB/256MB、界面疯狂 GC）。
-            val px = 64
-            val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
-            d.setBounds(0, 0, px, px)
-            d.draw(android.graphics.Canvas(b))
-            b.asImageBitmap()
-        }.getOrNull()
-    }
-    if (bmp != null) {
-        Image(
-            bmp,
-            contentDescription = null,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
-        )
-    } else {
-        Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(36.dp))
-    }
-}
 
-/** 动作的中文说法（模型里只有英文 key，界面上得说人话）。 */
-private fun actCn(act: Act): String = when (act.key) {
-    "click" -> "点掉"
-    "long_click" -> "长按"
-    "hide" -> "藏起来"
-    "remove" -> "摘掉"
-    "block" -> "拦住"
-    "goto" -> "跳走"
-    "back" -> "返回"
-    else -> act.key
-}
 
-/** 域的中文说法。 */
-private fun domainCn(key: String): String = when (key) {
-    "node" -> "控件"
-    "host" -> "域名"
-    "component" -> "组件"
-    "sdk" -> "SDK"
-    "sensor" -> "传感器"
-    "file" -> "文件"
-    else -> key
-}
+
+
+
 
 /** 动作对应的图标：一眼看出这条规则是"点掉"还是"藏起来"。 */
 private fun actIcon(act: Act): androidx.compose.ui.graphics.vector.ImageVector = when (act.key) {
@@ -1833,17 +1783,7 @@ private fun SettingRow(
     }
 }
 
-/** 多久之前。命中记录只看次数的话，分不清是刚才拦的还是上周拦的。 */
-private fun timeAgo(ms: Long): String {
-    val d = System.currentTimeMillis() - ms
-    return when {
-        d < 60_000 -> "刚刚"
-        d < 3_600_000 -> "${d / 60_000} 分钟前"
-        d < 86_400_000 -> "${d / 3_600_000} 小时前"
-        d < 7 * 86_400_000L -> "${d / 86_400_000} 天前"
-        else -> java.text.SimpleDateFormat("M月d日", java.util.Locale.CHINA).format(java.util.Date(ms))
-    }
-}
+
 
 /** 信息卡的一行：标签 + 值（旧版主页下半部分那种列）。 */
 @Composable

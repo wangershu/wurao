@@ -46,7 +46,13 @@ object FrameOverlay {
         val wrap = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val handle = dragHandle(ctx, wrap)
         wrap.addView(handle)
-        val content = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        val content = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(ctx, 14).toFloat()
+                setColor(0xF21C1C1E.toInt())   // 不透明
+            }
+        }
         wrap.addView(content)
         frame.panelContent = content
 
@@ -87,7 +93,7 @@ object FrameOverlay {
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = dp(ctx, 14).toFloat()
-                setColor(0xE61C1C1E.toInt())
+                setColor(0xF21C1C1E.toInt())   // 不透明（之前 0xE6 半透明看不清）
             }
             setPadding(dp(ctx, 12), dp(ctx, 7), dp(ctx, 8), dp(ctx, 5))
         }
@@ -232,6 +238,19 @@ object FrameOverlay {
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
             btnRow.addView(chip(ctx, "按建议做", primary = true) {
                 onPick(p, actEnum)
+                // 立即生效：点掉的话马上点掉（不等下次进入）
+                if (actEnum == Act.CLICK) {
+                    com.wurao.assist.SnapshotService.instance?.let { svc ->
+                        val cx = p.bounds.centerX().toFloat()
+                        val cy = p.bounds.centerY().toFloat()
+                        val path = android.graphics.Path().apply { moveTo(cx, cy); lineTo(cx, cy) }
+                        svc.dispatchGesture(
+                            android.accessibilityservice.GestureDescription.Builder()
+                                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 50))
+                                .build(), null, null,
+                        )
+                    }
+                }
                 FrameOverlay.hide(ctx)
             })
             btnRow.addView(chip(ctx, "取消") {

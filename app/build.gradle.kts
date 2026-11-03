@@ -29,7 +29,9 @@ android {
         compilerOptions {
             jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
             freeCompilerArgs.addAll(
-                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+                // AGP 9 内置的 Kotlin 是 2.2.0，miuix 0.9.4 是 2.4.0 编译的 —— 跳过 metadata 版本检查
+                "-Xskip-metadata-version-check"
             )
         }
     }
@@ -67,13 +69,13 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.compose.activity)
     implementation(libs.compose.lifecycle.runtime)
-    // miuix（MIUI 风格）：用本地 aar。0.9.0（Kotlin 2.2/2.4 都能跑）。
+    // miuix（MIUI 风格）：用本地 aar。0.9.4（与参考实现同版本；Kotlin 2.4.21 兼容）。
     // 远程坐标这台机器解析不到 —— 别改成远程坐标，会重新拉不到。
-    implementation(files("libs/miuix-ui-0.9.0.aar"))
-    implementation(files("libs/miuix-icons-0.9.0.aar"))
-    implementation(files("libs/miuix-preference-0.9.0.aar"))
+    implementation(files("libs/miuix-ui-android-0.9.4.aar"))
+    implementation(files("libs/miuix-icons-android-0.9.4.aar"))
+    implementation(files("libs/miuix-preference-android-0.9.4.aar"))
     // miuix 的底层依赖（本地 aar 不读 pom，必须自己补全，否则运行时 ClassNotFound）：
-    implementation(files("libs/miuix-core-android-0.9.0.aar"))
+    implementation(files("libs/miuix-core-android-0.9.4.aar"))
     implementation(files("libs/miuix-shapes-android-0.9.0.aar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
