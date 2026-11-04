@@ -311,9 +311,10 @@ private fun AboutHero(logoAlpha: Float, logoScale: Float, modifier: Modifier = M
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Image(
-                // 用图标前景（纯白描边盾牌）：这里套了 gradientMask，
-                // 需要的是「只有形状、没有自带配色」的那一份
-                painter = androidx.compose.ui.res.painterResource(com.wurao.R.drawable.ic_launcher_foreground),
+                // 涟漪符号（透明底设计稿），套 hero 渐变遮罩上色 ——
+                // 直接放原图在浅色渐变背景上太淡（实测看不清），
+                // 用 heroBrush 压成深色系，形状还是涟漪
+                painter = androidx.compose.ui.res.painterResource(com.wurao.R.drawable.wurao_symbol),
                 contentDescription = null,
                 modifier = Modifier
                     .size(88.dp)
