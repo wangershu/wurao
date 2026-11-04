@@ -1,5 +1,7 @@
 package com.wurao.core.store
 
+import kotlinx.coroutines.launch
+
 import com.wurao.core.model.Exclusion
 import com.wurao.core.model.Rule
 import com.wurao.core.source.GkdSubscription
@@ -21,15 +23,18 @@ object RuleStore {
     /** 持久化路径：/sdcard/Android/data/com.wurao.app/files/rules.json（hook 进程能读到）。 */
     private val persistPath = "/sdcard/Android/data/com.wurao.app/files/rules.json"
 
-    /** 保存到磁盘（hook 进程读）。 */
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+
+    /** 保存到磁盘（hook 进程读）。异步写，不卡 UI 线程。 */
     private fun persist() {
-        runCatching {
-            val json = rules.values.joinToString("\n") { r ->
-                // 一行一条：id|domain|target|act|enabled|scope.pkg
-                val pkg = (r.scope as? com.wurao.core.model.Scope.App)?.pkg ?: ""
-                "${r.id}|${r.domain.key}|${r.target}|${r.act.key}|${r.enabled}|$pkg"
+        scope.launch {
+            runCatching {
+                val json = rules.values.joinToString("\n") { r ->
+                    val pkg = (r.scope as? com.wurao.core.model.Scope.App)?.pkg ?: ""
+                    "${r.id}|${r.domain.key}|${r.target}|${r.act.key}|${r.enabled}|$pkg"
+                }
+                java.io.File(persistPath).apply { parentFile?.mkdirs() }.writeText(json)
             }
-            java.io.File(persistPath).apply { parentFile?.mkdirs() }.writeText(json)
         }
     }
 
