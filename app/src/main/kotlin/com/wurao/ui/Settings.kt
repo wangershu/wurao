@@ -189,6 +189,9 @@ fun SourcesScreen() {
     var act by remember { mutableStateOf(Act.HIDE) }
     var tip by remember { mutableStateOf("") }
     var confirmDel by remember { mutableStateOf<Rule?>(null) }
+    var noteInput by remember { mutableStateOf("") }
+    var editNote by remember { mutableStateOf<Rule?>(null) }
+    var noteDraft by remember { mutableStateOf("") }
 
     fun save() {
         Ui.pushRulesAsync(ctx)
@@ -207,7 +210,7 @@ fun SourcesScreen() {
             origin = Origin.User,
             groupKey = Cfg.GROUP_USER,
             ruleKey = sel.trim().hashCode().toString(),
-            note = sel.trim(),
+            note = noteInput.trim().ifBlank { sel.trim() },
         )
         val issues = r.validate()
         if (issues.isNotEmpty()) {
@@ -217,6 +220,7 @@ fun SourcesScreen() {
         RuleStore.upsert(r)
         save()
         sel = ""
+        noteInput = ""
         tip = "已加（共 ${RuleStore.all().size} 条）"
     }
 
@@ -295,6 +299,12 @@ fun SourcesScreen() {
                     label = "选择器",
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
+                TextField(
+                    value = noteInput,
+                    onValueChange = { noteInput = it },
+                    label = "备注（这条规则干嘛的，留空用选择器代替）",
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
                 // 动作选择：胶囊按钮组
                 Row(
                     modifier = Modifier.padding(top = 10.dp),
@@ -361,7 +371,12 @@ fun SourcesScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(r.target, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface)
+                            // 备注是主标题：一眼知道这条规则干嘛的
+                            Text(
+                                r.note.ifBlank { r.target },
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
                             val p = when (val sc = r.scope) {
                                 is Scope.App -> sc.pkg
                                 is Scope.Component -> sc.pkg
@@ -373,7 +388,17 @@ fun SourcesScreen() {
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 modifier = Modifier.padding(top = 2.dp),
                             )
+                            Text(
+                                r.target,
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
                         }
+                        TextButton(text = "改备注", onClick = {
+                            editNote = r
+                            noteDraft = r.note
+                        })
                         IconButton(onClick = { confirmDel = r }) {
                             Icon(
                                 imageVector = MiuixIcons.Delete,
@@ -435,6 +460,45 @@ fun SourcesScreen() {
             save()
         },
     )
+
+    if (editNote != null) {
+        Dialog(onDismissRequest = { editNote = null }) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(
+                        "改备注",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        editNote?.target ?: "",
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    TextField(
+                        value = noteDraft,
+                        onValueChange = { noteDraft = it },
+                        label = "这条规则干嘛的",
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(text = "取消", onClick = { editNote = null })
+                        TextButton(text = "保存", onClick = {
+                            editNote?.let { RuleStore.setNote(it.id, noteDraft.trim()) }
+                            editNote = null
+                            save()
+                            Ui.ruleRev++
+                        })
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ==================== 备份与恢复 ====================

@@ -126,6 +126,12 @@ object RuleStore {
         persist()
     }
 
+    /** 改备注（一句人话：这条规则是干嘛的）。 */
+    fun setNote(id: String, note: String) {
+        rules[id]?.let { rules[id] = it.copy(note = note) }
+        persist()
+    }
+
     fun setExcluded(pkg: String, excluded: Boolean) {
         if (excluded) exclusions[pkg] = Exclusion(pkg, enable = false)
         else exclusions.remove(pkg)
