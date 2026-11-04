@@ -79,6 +79,26 @@ object FrameOverlay {
         runCatching { w.addView(r, wlp); root = r }
     }
 
+    /** 立即遮盖：在该控件位置画一个不透明的方块盖住（藏起来后立即看不到）。 */
+    private fun addCover(ctx: Context, bounds: android.graphics.Rect) {
+        val w = wm ?: return
+        val cover = View(ctx).apply {
+            setBackgroundColor(Color.BLACK)
+        }
+        val lp = WindowManager.LayoutParams(
+            bounds.width(), bounds.height(),
+            if (Build.VERSION.SDK_INT >= 22) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = bounds.left; y = bounds.top
+        }
+        runCatching { w.addView(cover, lp) }
+        android.util.Log.i("Wurao", "已遮盖 ${bounds.width()}x${bounds.height()}")
+    }
+
     fun hide(ctx: Context) {
         root?.let { runCatching { wm?.removeView(it) } }
         root = null
@@ -238,18 +258,22 @@ object FrameOverlay {
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
             btnRow.addView(chip(ctx, "按建议做", primary = true) {
                 onPick(p, actEnum)
-                // 立即生效：点掉的话马上点掉（不等下次进入）
+                val svc = com.wurao.assist.SnapshotService.instance
                 if (actEnum == Act.CLICK) {
-                    com.wurao.assist.SnapshotService.instance?.let { svc ->
+                    // 点掉：立即点一下（dispatchGesture）
+                    svc?.let {
                         val cx = p.bounds.centerX().toFloat()
                         val cy = p.bounds.centerY().toFloat()
                         val path = android.graphics.Path().apply { moveTo(cx, cy); lineTo(cx, cy) }
-                        svc.dispatchGesture(
+                        it.dispatchGesture(
                             android.accessibilityservice.GestureDescription.Builder()
                                 .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 50))
                                 .build(), null, null,
                         )
                     }
+                } else {
+                    // 藏起来：立即画一个遮盖盖住它（立即看不到，确认效果）
+                    svc?.let { addCover(it, p.bounds) }
                 }
                 FrameOverlay.hide(ctx)
             })
