@@ -79,26 +79,6 @@ object FrameOverlay {
         runCatching { w.addView(r, wlp); root = r }
     }
 
-    /** 立即遮盖：在该控件位置画一个不透明的方块盖住（藏起来后立即看不到）。 */
-    private fun addCover(ctx: Context, bounds: android.graphics.Rect) {
-        val w = wm ?: return
-        val cover = View(ctx).apply {
-            setBackgroundColor(Color.BLACK)
-        }
-        val lp = WindowManager.LayoutParams(
-            bounds.width(), bounds.height(),
-            if (Build.VERSION.SDK_INT >= 22) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = bounds.left; y = bounds.top
-        }
-        runCatching { w.addView(cover, lp) }
-        android.util.Log.i("Wurao", "已遮盖 ${bounds.width()}x${bounds.height()}")
-    }
-
     fun hide(ctx: Context) {
         root?.let { runCatching { wm?.removeView(it) } }
         root = null
@@ -271,10 +251,9 @@ object FrameOverlay {
                                 .build(), null, null,
                         )
                     }
-                } else {
-                    // 藏起来：立即画一个遮盖盖住它（立即看不到，确认效果）
-                    svc?.let { addCover(it, p.bounds) }
                 }
+                // 藏起来：只存规则，不画遮盖（遮盖会一直遮住、切换 App 还在，不对）。
+                // 真正的隐藏由引擎下次进入时做（view.visibility = GONE）。
                 FrameOverlay.hide(ctx)
             })
             btnRow.addView(chip(ctx, "取消") {
