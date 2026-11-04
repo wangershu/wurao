@@ -1,6 +1,9 @@
 package com.wurao.core.store
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
 
 import com.wurao.core.model.Exclusion
 import com.wurao.core.model.Rule
@@ -20,23 +23,51 @@ object RuleStore {
     private val rules = LinkedHashMap<String, Rule>()
     private val exclusions = HashMap<String, Exclusion>()
 
-    /** 持久化路径：/sdcard/Android/data/com.wurao.app/files/rules.json（hook 进程能读到）。 */
-    private val persistPath = "/sdcard/Android/data/com.wurao.app/files/rules.json"
+    /**
+     * 规则落位（一次性写，不是运行时同步）：
+     * 写进模块自己的 SharedPreferences，每个应用一个文件 wurao_rules_<pkg>；
+     * hook 进程用 libxposed 的 getRemotePreferences 读自己那一个（框架托管，
+     * 不走 IPC、不需要无扰在后台、不受 MIUI 自启动管控拦）。
+     * - 控件规则：按应用切分，只落位已勾选 / 抓过规则的应用
+     * - 域名规则：全存一份 wurao_domains（全局拦截，不切分）
+     * 其余订阅规则留在内存，等该应用被勾选再 land(pkg)。
+     */
+    private val ioScope = CoroutineScope(Dispatchers.IO)
 
-    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+    private fun pkgOf(r: Rule): String = when (val sc = r.scope) {
+        is com.wurao.core.model.Scope.App -> sc.pkg
+        is com.wurao.core.model.Scope.Component -> sc.pkg
+        com.wurao.core.model.Scope.Global -> ""
+    }
 
-    /** 保存到磁盘（hook 进程读）。异步写，不卡 UI 线程。 */
-    private fun persist() {
-        scope.launch {
-            runCatching {
-                val json = rules.values.joinToString("\n") { r ->
-                    val pkg = (r.scope as? com.wurao.core.model.Scope.App)?.pkg ?: ""
-                    "${r.id}|${r.domain.key}|${r.target}|${r.act.key}|${r.enabled}|$pkg"
-                }
-                java.io.File(persistPath).apply { parentFile?.mkdirs() }.writeText(json)
+    /** 变更后重新落位：只落 LSPosed 勾选的应用；域名规则全存一份。 */
+    private fun persist() = ioScope.launch {
+        runCatching {
+            val scope = com.wurao.core.XposedBridge.scope()
+            val hides = rules.values.filter { r ->
+                r.enabled && r.act == com.wurao.core.model.Act.HIDE && pkgOf(r).isNotBlank()
             }
+            // 对每个勾选应用都落位（没规则的写空，用来清掉旧规则）；
+            // 拿不到 scope（未绑定框架）时按有规则的应用全落
+            val pkgs = if (scope.isEmpty()) hides.map { pkgOf(it) }.distinct() else scope.toList()
+            val byPkg = pkgs.filter { it.isNotBlank() }.associateWith { pkg ->
+                hides.filter { pkgOf(it) == pkg }.map { it.target }
+            }
+            // 域名规则：全局一份，不按应用切（反正都要拦）
+            val domains = rules.values.filter { r ->
+                r.enabled && r.domain == com.wurao.core.model.Domain.HOST
+            }.map { it.target }.toMutableList()
+            // 订阅域名表独立存于内部文件，也一起落位
+            runCatching {
+                val f = java.io.File("/data/data/com.wurao.app/files/adclose.txt")
+                if (f.exists()) domains += f.readLines()
+            }
+            com.wurao.core.XposedBridge.land(byPkg, domains.distinct())
         }
     }
+
+    /** 框架绑定后补一次落位（避免启动时 service 还没连上）。 */
+    fun reland() = persist()
 
     data class ImportReport(
         val added: Int,
