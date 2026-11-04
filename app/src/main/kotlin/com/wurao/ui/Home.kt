@@ -35,15 +35,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wurao.assist.FloatService
-import com.wurao.assist.SnapshotService
 import com.wurao.core.Cfg
 import com.wurao.core.model.Origin
 import com.wurao.core.store.RuleStore
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.ScreenCapture
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 // 状态卡配色，取自 HyperIsland 的 OverviewPage（与旧版一致）
@@ -147,11 +144,11 @@ fun HomeScreen() {
             }
         }
 
-        // ---------- 常用（只留两项，评审拍板） ----------
+        // ---------- 常用（悬浮球就是抓规则，评审拍板合并成一项） ----------
         item { Kit.Section("常用") }
         item {
             Kit.RowGroup {
-                // 悬浮球：一个小胶囊贴在屏幕边缘，随时点一下就开启抓屏
+                // 悬浮球：一个小胶囊贴在屏幕边缘，点一下就开启抓屏（画框点选生成规则）
                 var floatOn by remember {
                     mutableStateOf(Ui.prefs(ctx).getBoolean("float_ball", false))
                 }
@@ -175,26 +172,10 @@ fun HomeScreen() {
                     }
                 }
                 Kit.SwitchRow(
-                    title = "悬浮球",
-                    summary = "一个小胶囊贴在屏幕边缘，随时点一下就开启抓屏（不用回应用里）",
+                    title = "悬浮球抓规则",
+                    summary = "贴在屏幕边缘的小胶囊，点一下开启抓屏：控件被橙框框出来，点哪个治哪个",
                     checked = floatOn,
                     onChecked = { setFloat(it) },
-                )
-                Kit.ArrowRow(
-                    title = "抓规则",
-                    summary = if (SnapshotService.active) {
-                        "到应用页挑一个 App，抓屏画框点选"
-                    } else {
-                        "抓屏服务没连上 —— 先去开无障碍（设置 › 无障碍 › 已下载的服务 › 无扰）"
-                    },
-                    icon = MiuixIcons.ScreenCapture,
-                    onClick = {
-                        if (SnapshotService.active) {
-                            Navigator.switch(Navigator.Tab.APPS)
-                        } else {
-                            ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        }
-                    },
                 )
             }
         }

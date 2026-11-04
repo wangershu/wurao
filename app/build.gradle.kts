@@ -75,8 +75,14 @@ dependencies {
     implementation(files("libs/miuix-icons-android-0.9.4.aar"))
     implementation(files("libs/miuix-preference-android-0.9.4.aar"))
     // miuix 的底层依赖（本地 aar 不读 pom，必须自己补全，否则运行时 ClassNotFound）：
+    // squircle 是 0.9.x 拆出来的独立构件（0.9.4 ui 引用 SquircleBackground，
+    // 缺它悬浮底栏一组合就 NoClassDefFoundError 闪退，实测）；
+    // shapes 没有 0.9.4 的 android aar（Maven 404），沿用 0.9.0。
     implementation(files("libs/miuix-core-android-0.9.4.aar"))
     implementation(files("libs/miuix-shapes-android-0.9.0.aar"))
+    implementation(files("libs/miuix-squircle-android-0.9.4.aar"))
+    // squircle 又依赖 shader（悬浮底栏圆角背景的 RuntimeShader）
+    implementation(files("libs/miuix-shader-android-0.9.4.aar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
 

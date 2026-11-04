@@ -201,6 +201,17 @@ object Ui {
     }
 }
 
+/**
+ * 备份/恢复的文件通道（SAF）。
+ *
+ * 启动器只能由 Activity 注册，BackupScreen 在 pager 深处拿不到，
+ * 所以 MainActivity 注册好后把「点导出/点导入」两个动作挂到这里。
+ */
+object BackupBridge {
+    var onExportClick: () -> Unit = {}
+    var onImportClick: () -> Unit = {}
+}
+
 /** 多久之前。命中记录只看次数的话，分不清是刚才拦的还是上周拦的。 */
 fun timeAgo(ms: Long): String {
     val d = System.currentTimeMillis() - ms

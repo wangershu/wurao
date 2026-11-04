@@ -58,7 +58,6 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.Community
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Link
@@ -192,12 +191,6 @@ fun AboutScreen() {
             item { Kit.Section("模块") }
             item {
                 Kit.RowGroup {
-                    Kit.ArrowRow(
-                        title = "备份与恢复",
-                        summary = "导出 / 导入全部规则与配置",
-                        icon = MiuixIcons.Backup,
-                        onClick = { Navigator.go(Dest.Backup) }
-                    )
                     Kit.PlainRow(
                         title = "检查更新",
                         summary = updateHint.ifBlank { "点一下去 GitHub 查最新版" },
@@ -302,18 +295,6 @@ fun AboutScreen() {
 /** Hero：图标 + 应用名 + 版本，整体居中偏下一点（和参考项目的 30dp 偏移一致） */
 @Composable
 private fun AboutHero(logoAlpha: Float, logoScale: Float, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    // 用应用自身图标（项目里没有 monochrome 资源），套渐变遮罩上色
-    val icon = remember {
-        runCatching {
-            val d = ctx.packageManager.getApplicationIcon(ctx.packageName)
-            val px = 176
-            val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
-            d.setBounds(0, 0, px, px)
-            d.draw(android.graphics.Canvas(b))
-            b.asImageBitmap()
-        }.getOrNull()
-    }
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -329,15 +310,15 @@ private fun AboutHero(logoAlpha: Float, logoScale: Float, modifier: Modifier = M
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (icon != null) {
-                Image(
-                    bitmap = icon,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(88.dp)
-                        .gradientMask(heroBrush())
-                )
-            }
+            Image(
+                // 用图标前景（纯白描边盾牌）：这里套了 gradientMask，
+                // 需要的是「只有形状、没有自带配色」的那一份
+                painter = androidx.compose.ui.res.painterResource(com.wurao.R.drawable.ic_launcher_foreground),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(88.dp)
+                    .gradientMask(heroBrush())
+            )
             Spacer(Modifier.height(20.dp))
             Text(
                 text = APP_NAME,

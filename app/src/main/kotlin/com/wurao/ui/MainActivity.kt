@@ -5,8 +5,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -17,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.wurao.assist.FrameOverlay
 import com.wurao.assist.SnapshotService
@@ -53,8 +57,55 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  */
 class MainActivity : ComponentActivity() {
 
+    /**
+     * 备份/恢复的文件通道（SAF 系统文件选择器，不要存储权限）。
+     * 导出内容是 JSON（所有配置的键值对）；恢复是整份覆盖，
+     * 所以确认弹窗会先告诉用户里面有多少项。
+     */
+    private val exportFile =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            runCatching {
+                contentResolver.openOutputStream(uri)?.use { it.write(Ui.exportText(this).toByteArray()) }
+            }.onSuccess {
+                toast("已导出备份（JSON）")
+            }.onFailure {
+                toast("导出失败：${it.message ?: "写不进去"}")
+            }
+        }
+
+    private val importFile =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+            }.getOrNull()
+            if (text.isNullOrBlank()) {
+                toast("读不到这个文件")
+                return@registerForActivityResult
+            }
+            val n = runCatching { org.json.JSONObject(text).length() }.getOrDefault(-1)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("恢复备份？")
+                .setMessage(if (n >= 0) "里面包含 $n 项配置，恢复是整份覆盖。" else "这段不是有效的备份（解析失败）")
+                .setPositiveButton("恢复") { _, _ ->
+                    if (n >= 0) toast(Ui.restoreText(this, text))
+                }
+                .setNegativeButton("算了", null)
+                .show()
+        }
+
+    private fun toast(s: String) = android.widget.Toast.makeText(this, s, 1).show()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 备份页的两个按钮接到 SAF 启动器上
+        BackupBridge.onExportClick = {
+            val day = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
+                .format(java.util.Date())
+            exportFile.launch("wurao-backup-$day.json")
+        }
+        BackupBridge.onImportClick = { importFile.launch(arrayOf("application/json", "text/*")) }
         // 把落盘的命中记录读回内存（这些记录是目标进程通过 HitProvider 写进来的）
         HitProvider.restore(this)
         // 同步加载，不再放后台 —— 后台会和推送抢：加载没完就推送，
@@ -368,10 +419,18 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             bottomBar = { if (Navigator.atRoot) BottomBar() },
         ) { padding ->
-            // 根 padding 不套到 pager 上（状态栏内边距会被内层 Scaffold 再算一遍）；
-            // 底栏高度下发给各页列表，只在内容末尾留白
+            // 根 padding 只取「底栏自身的高度」下发给列表；系统栏内边距交给各页自己的 Scaffold，
+            // 否则状态栏会被算两遍、整个顶栏下移一个状态栏高度。
+            val navBarInset = with(LocalDensity.current) {
+                WindowInsets.navigationBars.getBottom(this).toDp()
+            }
+            var barInset = (padding.calculateBottomPadding() - navBarInset).coerceAtLeast(0.dp)
+            // 悬浮底栏要额外补一截：FloatingNavigationBar 自带「悬浮外边距」
+            // （胶囊和屏幕底边之间那段），Scaffold 下发的 bottomPadding 只算测量高度，
+            // 不含那段外边距 —— 不补的话列表末行会滑到底栏底下去（真机截图实测）。
+            if (UiPrefs.floatingBar) barInset += 24.dp
             CompositionLocalProvider(
-                Kit.LocalBottomBarInset provides padding.calculateBottomPadding()
+                Kit.LocalBottomBarInset provides barInset
             ) {
                 Box(Modifier.fillMaxSize()) {
                     HorizontalPager(

@@ -48,7 +48,8 @@ import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 设置：平铺一张列表（评审拍板：不加小分类），每行一张卡，全部进二级页。
+ * 设置：平铺一张列表（评审拍板：不加小分类）。
+ * 顺序也是拍板的：全部暂停在最顶（开关），关于沉底。
  */
 @Composable
 fun SettingsScreen() {
@@ -60,6 +61,26 @@ fun SettingsScreen() {
 
     Kit.Page(title = "设置") {
         item {
+            // 破坏性操作放最顶上：开关即状态，开之前确认一次
+            Kit.RowGroup {
+                Kit.SwitchRow(
+                    title = "全部暂停",
+                    summary = if (paused) "现在所有拦截都停着" else "一键停掉所有拦截（规则保留，随时恢复）",
+                    icon = MiuixIcons.Pause,
+                    checked = paused,
+                    onChecked = { on ->
+                        if (on) {
+                            confirmPause = true
+                        } else {
+                            paused = false
+                            Ui.prefs(ctx).edit().putString(Cfg.KEY_PAUSED, "false").apply()
+                            Ui.pushRulesAsync(ctx)
+                        }
+                    },
+                )
+            }
+        }
+        item {
             Kit.ArrowItem(
                 title = "订阅与规则源",
                 summary = "导入订阅 / 域名表，管理我自己的规则",
@@ -70,7 +91,7 @@ fun SettingsScreen() {
         item {
             Kit.ArrowItem(
                 title = "备份与恢复",
-                summary = "导出成一段文本存着，换手机粘回来",
+                summary = "导出成 JSON 文件存着，换手机导回来",
                 icon = MiuixIcons.Backup,
                 onClick = { Navigator.go(Dest.Backup) },
             )
@@ -91,31 +112,12 @@ fun SettingsScreen() {
                 onClick = { Navigator.go(Dest.About) },
             )
         }
-        item {
-            // 破坏性操作放最底，开之前要确认
-            Kit.RowGroup {
-                Kit.PlainRow(
-                    title = if (paused) "已全部暂停" else "全部暂停",
-                    summary = if (paused) "现在所有拦截都停着，点这里恢复" else "一键停掉所有拦截（规则保留，随时恢复）",
-                    icon = MiuixIcons.Pause,
-                    onClick = {
-                        if (paused) {
-                            paused = false
-                            Ui.prefs(ctx).edit().putString(Cfg.KEY_PAUSED, "false").apply()
-                            Ui.pushRulesAsync(ctx)
-                        } else {
-                            confirmPause = true
-                        }
-                    },
-                )
-            }
-        }
     }
 
     ConfirmDialog(
         show = confirmPause,
         title = "全部暂停？",
-        text = "所有拦截都会停掉（规则保留）。再点一次恢复。",
+        text = "所有拦截都会停掉（规则保留）。把开关关回去就恢复。",
         confirmText = "暂停",
         onDismiss = { confirmPause = false },
         onConfirm = {
@@ -437,52 +439,25 @@ fun SourcesScreen() {
 
 // ==================== 备份与恢复 ====================
 
-/** 备份与恢复（对齐原版 BackupSettingsScreen 的结构） */
+/** 备份与恢复（对齐原版结构；导出物从「一段文本」改成 JSON 文件 —— 评审拍板） */
 @Composable
 fun BackupScreen() {
-    val ctx = LocalContext.current
-    val rev = Ui.ruleRev
-    var backupText by remember { mutableStateOf("") }
-    var backupTip by remember { mutableStateOf("") }
-
     Kit.DetailPage(title = "备份与恢复", onBack = { Navigator.back() }) {
         item { Kit.Section("导出 / 恢复") }
         item {
             Kit.Group {
                 Text(
-                    "导出成一段文本（同时复制到剪贴板），复制到任何地方存着；换手机或重装后粘回来即可。" +
-                        "恢复是整份覆盖，会先告诉你里面有多少项。",
+                    "导出的是一个 JSON 文件，包含规则、域名、开关等全部配置。" +
+                        "存到网盘或发给新手机，在那边「从文件导入」即可。恢复是整份覆盖，会先告诉你里面有多少项。",
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
-                TextField(
-                    value = backupText,
-                    onValueChange = { backupText = it },
-                    label = "备份内容",
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                )
-                Row(modifier = Modifier.padding(top = 8.dp)) {
-                    TextButton(text = "导出", onClick = {
-                        backupText = Ui.exportText(ctx)
-                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as? android.content.ClipboardManager
-                        cm?.setPrimaryClip(
-                            android.content.ClipData.newPlainText("wurao", backupText)
-                        )
-                        backupTip = "已导出并复制到剪贴板（${backupText.length} 字符）"
-                    })
+                Row(modifier = Modifier.padding(top = 10.dp)) {
+                    TextButton(text = "导出到文件", onClick = { BackupBridge.onExportClick() })
                     TextButton(
-                        text = "恢复",
-                        onClick = { backupTip = Ui.restoreText(ctx, backupText.trim()) },
+                        text = "从文件导入",
+                        onClick = { BackupBridge.onImportClick() },
                         modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                if (backupTip.isNotEmpty()) {
-                    Text(
-                        backupTip,
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
             }
@@ -491,7 +466,10 @@ fun BackupScreen() {
         item { Kit.Section("当前数据量") }
         item {
             Kit.Group {
-                val all = run { rev; RuleStore.all() }
+                val all = run {
+                    Ui.ruleRev
+                    RuleStore.all()
+                }
                 Kit.KeyValue("规则条数", "${all.size}")
                 Kit.KeyValue("其中订阅导入", "${all.count { it.origin !is Origin.User }}")
                 Kit.KeyValue("命中记录", "${HitStore.all().size}")
