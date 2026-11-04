@@ -33,20 +33,34 @@ class WuraoModule : XposedModule() {
 
     /** 遍历 View 树，匹配 HIDE 规则的控件直接 GONE。 */
     private fun hideMatched(vg: ViewGroup, pkg: String) {
-        val rules = RuleStore.all().filter {
-            it.enabled && it.act == Act.HIDE && (it.scope as? com.wurao.core.model.Scope.App)?.pkg == pkg
-        }
+        // hook 进程读不到我的 App 的内存（RuleStore 是内存的）→ 读磁盘上的规则文件
+        val rules = loadHideRules(pkg)
         if (rules.isEmpty()) return
         currentPkg = pkg
         hideRecursive(vg, rules)
     }
 
-    private fun hideRecursive(v: View, rules: List<Rule>) {
-        for (r in rules) {
-            if (matches(r, v)) {
+    /** 读磁盘上的规则文件（我的 App 写到的共享存储），过滤 HIDE + 这个包。 */
+    private fun loadHideRules(pkg: String): List<String> {
+        val f = java.io.File("/sdcard/Android/data/com.wurao.app/files/rules.json")
+        if (!f.exists()) return emptyList()
+        return runCatching {
+            f.readLines().mapNotNull { line ->
+                val parts = line.split("|")
+                // id|domain|target|act|enabled|pkg
+                if (parts.size < 6) return@mapNotNull null
+                if (parts[3] != "hide" || parts[4] != "true" || parts[5] != pkg) return@mapNotNull null
+                parts[2]  // target（选择器字符串）
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun hideRecursive(v: View, rules: List<String>) {
+        for (target in rules) {
+            if (matchesTarget(target, v)) {
                 if (v.visibility != View.GONE) {
                     v.visibility = View.GONE
-                    Log.i("Wurao", "hid ${r.target} in $currentPkg")
+                    Log.i("Wurao", "hid $target in $currentPkg")
                 }
                 return
             }
@@ -58,12 +72,10 @@ class WuraoModule : XposedModule() {
 
     private var currentPkg = ""
 
-    /** 规则匹配 View：解析选择器字符串，提取 text/vid 匹配这个 View。
-     *  简化版：完整的选择器引擎（SelectorMatcher + View 适配器）后面再接。 */
-    private fun matches(r: Rule, v: View): Boolean {
-        val t = r.target
+    /** 选择器字符串匹配 View：解析 [text*="..."][vid="..."][desc*="..."] 是否命中这个 View。 */
+    private fun matchesTarget(target: String, v: View): Boolean {
         // [text*="跳过"] → 匹配 text 包含
-        Regex("\\[text\\*?=\"([^\"]+)\"\\]").find(t)?.let { m ->
+        Regex("\\[text\\*?=\"([^\"]+)\"\\]").find(target)?.let { m ->
             val txt = when (v) {
                 is android.widget.TextView -> v.text?.toString() ?: ""
                 else -> v.contentDescription?.toString() ?: ""
@@ -71,12 +83,12 @@ class WuraoModule : XposedModule() {
             if (!txt.contains(m.groupValues[1])) return false
         }
         // [vid="ad_container"] → 匹配资源名
-        Regex("\\[vid=\"([^\"]+)\"\\]").find(t)?.let { m ->
+        Regex("\\[vid=\"([^\"]+)\"\\]").find(target)?.let { m ->
             val name = runCatching { v.resources.getResourceEntryName(v.id) }.getOrNull() ?: return@let
             if (name != m.groupValues[1]) return false
         }
         // [desc*="广告"] → 匹配 contentDescription
-        Regex("\\[desc\\*?=\"([^\"]+)\"\\]").find(t)?.let { m ->
+        Regex("\\[desc\\*?=\"([^\"]+)\"\\]").find(target)?.let { m ->
             val cd = v.contentDescription?.toString() ?: ""
             if (!cd.contains(m.groupValues[1])) return false
         }
