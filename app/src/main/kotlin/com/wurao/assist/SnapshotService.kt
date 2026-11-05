@@ -100,7 +100,8 @@ class SnapshotService : AccessibilityService() {
                 val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = act)
                 val store = com.wurao.core.store.RuleStore
                 rules.forEach { store.upsert(it) }
-                com.wurao.ui.CfgPush.flush(this)
+                android.util.Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} 共 ${rules.size} 条 target=${rules.firstOrNull()?.target}")
+                com.wurao.ui.Ui.pushRulesAsync(this)
                 android.widget.Toast.makeText(
                     this,
                     "已保存 ${rules.size} 条：${rules.firstOrNull()?.target}",
@@ -117,7 +118,9 @@ class SnapshotService : AccessibilityService() {
     fun captureNow(): List<Pick> {
         val root = runCatching { rootInActiveWindow }.getOrNull() ?: return emptyList()
         val out = ArrayList<Pick>()
-        val pkg = lastPkg
+        // 用当前窗口自己的包名，不用 lastPkg：悬浮球点击的无障碍事件
+        // 可能把 lastPkg 写成无扰自己，规则就会落到错误的包
+        val pkg = runCatching { root.packageName?.toString() }.getOrNull() ?: lastPkg
         try {
             walk(root, null, out, pkg)
         } finally {

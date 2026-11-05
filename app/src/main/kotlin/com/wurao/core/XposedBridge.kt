@@ -1,5 +1,8 @@
 package com.wurao.core
 
+import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
@@ -56,10 +59,15 @@ object XposedBridge {
 
     val bound: Boolean get() = svc != null
 
-    /** 落位：控件规则按应用切分，域名规则全存一份。 */
+    /**
+     * 落位：控件规则按应用切分，域名规则全存一份。
+     *
+     * 走框架的**远程文件**通道，不用 getRemotePreferences：后者在目标进程
+     * 是「进程启动那一刻的快照」，App 侧后续写入刷新不过去（实测写侧
+     * commit ok=true、hook 侧读到 0 条）。远程文件写完目标进程立刻能读到。
+     */
     fun land(byPkg: Map<String, List<String>>, domains: List<String>) {
         val s = svc ?: run {
-            // 未绑定时日志降频，别刷屏拖垮 logcat
             val now = android.os.SystemClock.elapsedRealtime()
             if (now - lastSkipLogMs > 5000) {
                 lastSkipLogMs = now
@@ -73,23 +81,38 @@ object XposedBridge {
                 val key = "wurao_rules_$pkg"
                 val content = targets.joinToString("\n") { b64(it) }
                 if (lastWritten[key] == content) return@forEach
-                s.getRemotePreferences(key).edit().putString("rules", content).commit()
-                lastWritten[key] = content
-                changed++
+                if (writeRemote(s, key, content)) { lastWritten[key] = content; changed++ }
             }
             val domContent = domains.joinToString("\n")
-            // 域名表为空时不覆盖已有数据：订阅导入中间态可能读不到域名文件，
-            // 之前就是这样把 3.4 万条域名冲成空串的
             if (domContent.isNotBlank() && lastWritten["wurao_domains"] != domContent) {
-                s.getRemotePreferences("wurao_domains")
-                    .edit().putString("domains", domContent).commit()
-                lastWritten["wurao_domains"] = domContent
-                changed++
+                if (writeRemote(s, "wurao_domains", domContent)) {
+                    lastWritten["wurao_domains"] = domContent
+                    changed++
+                }
             }
             if (changed > 0)
                 Log.i("Wurao", "landed ${byPkg.size} apps, ${domains.size} domains (changed=$changed)")
         }.onFailure { Log.w("Wurao", "land failed: ${it.javaClass.simpleName} ${it.message}") }
     }
+
+    private fun writeRemote(s: XposedService, name: String, content: String): Boolean = runCatching {
+        // 空规则直接删文件：ftruncate 对框架给的 fd 不一定生效，删掉最干净
+        if (content.isEmpty()) {
+            runCatching { s.deleteRemoteFile(name) }
+            return true
+        }
+        val pfd = s.openRemoteFile(name) ?: return false
+        pfd.use {
+            val fd = it.fileDescriptor
+            // 远程文件是已存在的描述符，新内容更短时必须先截断，否则留残字节
+            runCatching { Os.ftruncate(fd, 0L) }
+            runCatching { Os.lseek(fd, 0L, OsConstants.SEEK_SET) }
+            ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { os ->
+                os.write(content.toByteArray(Charsets.UTF_8))
+            }
+        }
+        true
+    }.getOrDefault(false)
 
     private fun b64(s: String): String =
         java.util.Base64.getEncoder().encodeToString(s.toByteArray(Charsets.UTF_8))

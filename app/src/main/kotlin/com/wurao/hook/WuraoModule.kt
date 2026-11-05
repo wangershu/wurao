@@ -82,15 +82,10 @@ class WuraoModule : XposedModule() {
         if (now - lastLoadMs < 2000) return cachedRules
         lastLoadMs = now
         val list = runCatching {
-            val prefs = getRemotePreferences("wurao_rules_$pkg") ?: return@runCatching emptyList()
-            val raw = prefs.getString("rules", "") ?: ""
-            raw.lines().filter { it.isNotBlank() }.mapNotNull { line ->
+            readRemote("wurao_rules_$pkg").lines().filter { it.isNotBlank() }.mapNotNull { line ->
                 runCatching { String(java.util.Base64.getDecoder().decode(line), Charsets.UTF_8) }.getOrNull()
             }
-        }.getOrElse { e ->
-            Log.w("Wurao", "remote prefs failed: ${e.javaClass.simpleName} ${e.message}")
-            emptyList()
-        }
+        }.getOrElse { emptyList() }
         cachedRules = list
         if (list.size != cachedBefore) Log.i("Wurao", "rules loaded: ${list.size} for $pkg")
         return cachedRules
@@ -152,9 +147,7 @@ class WuraoModule : XposedModule() {
         if (now - lastDomainMs < 5000) return domainSet
         lastDomainMs = now
         val set = runCatching {
-            val prefs = getRemotePreferences("wurao_domains") ?: return@runCatching emptySet()
-            val raw = prefs.getString("domains", "") ?: ""
-            raw.lines().mapNotNull(::cleanDomain).toHashSet()
+            readRemote("wurao_domains").lines().mapNotNull(::cleanDomain).toHashSet()
         }.getOrDefault(emptySet())
         domainSet = set
         if (set.isNotEmpty()) {
@@ -189,6 +182,13 @@ class WuraoModule : XposedModule() {
         }
         return false
     }
+
+    /** 读框架托管的远程文件（写侧是 XposedBridge.writeRemote）。 */
+    private fun readRemote(name: String): String = runCatching {
+        val pfd = openRemoteFile(name) ?: return ""
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd)
+            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }.getOrDefault("")
 
     /** 命中后返回不可达地址（不是抛异常，避免应用崩溃或重试风暴）。 */
     private fun blackhole(host: String): InetAddress =

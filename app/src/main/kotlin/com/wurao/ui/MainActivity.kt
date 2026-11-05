@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.wurao.core.XposedBridge.init()
         com.wurao.core.XposedBridge.onBind { com.wurao.core.store.RuleStore.reland() }
+
         // 备份页的两个按钮接到 SAF 启动器上
         BackupBridge.onExportClick = {
             val day = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
@@ -114,6 +115,14 @@ class MainActivity : ComponentActivity() {
         // 会把"半成品"写回去覆盖完整配置，实测静默丢了 6700 条规则。
         // 2.8 万条实测不卡（ANR 记录新增 0），为它冒竞态的险不值。
         Ui.restoreRules(this)
+        // 清掉早期调试规则（会隐藏所有 TextView），老用户升级后自动清一次
+        val debugRules = com.wurao.core.store.RuleStore.all().filter {
+            it.target.contains("[name=\"TextView\"]")
+        }
+        if (debugRules.isNotEmpty()) {
+            debugRules.forEach { com.wurao.core.store.RuleStore.remove(it.id) }
+            Ui.pushRulesAsync(this)
+        }
         Ui.rulesLoaded = true
         // 绑上框架服务后会把本地配置推进 hook 进程；之后每次改动也会推
         CfgPush.bind(this)

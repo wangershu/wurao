@@ -92,6 +92,7 @@ object RuleStore {
                 val f = java.io.File("/data/data/com.wurao.app/files/adclose.txt")
                 if (f.exists()) domains += f.readLines()
             }
+            android.util.Log.i("Wurao", "doLand: ${byPkg.values.sumOf { it.size }} 条 HIDE / ${byPkg.size} 个应用 / ${domains.size} 域名")
             com.wurao.core.XposedBridge.land(byPkg, domains.distinct())
         }
     }
