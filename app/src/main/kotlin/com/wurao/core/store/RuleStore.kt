@@ -2,6 +2,8 @@ package com.wurao.core.store
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
@@ -40,8 +42,24 @@ object RuleStore {
         com.wurao.core.model.Scope.Global -> ""
     }
 
-    /** 变更后重新落位：只落 LSPosed 勾选的应用；域名规则全存一份。 */
-    private fun persist() = ioScope.launch {
+    /**
+     * 变更后重新落位（去抖 500ms）。
+     * 导入订阅是逐条 upsert（几万条），不能每次都全量扫描 + 落位 —— 之前就是
+     * 这样把 CPU 打满导致 ANR。合并成一次。
+     */
+    @Volatile private var pendingJob: Job? = null
+
+    private fun persist() {
+        synchronized(this) {
+            pendingJob?.cancel()
+            pendingJob = ioScope.launch {
+                delay(500)
+                doLand()
+            }
+        }
+    }
+
+    private fun doLand() {
         runCatching {
             val scope = com.wurao.core.XposedBridge.scope()
             val hides = rules.values.filter { r ->

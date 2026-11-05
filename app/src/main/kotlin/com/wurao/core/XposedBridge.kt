@@ -18,6 +18,10 @@ object XposedBridge {
     @Volatile private var svc: XposedService? = null
     @Volatile private var onReady: (() -> Unit)? = null
 
+    /** 上次写入的内容，内容没变就不重复写（避免几十次同步 binder 提交）。 */
+    private val lastWritten = java.util.concurrent.ConcurrentHashMap<String, String>()
+    @Volatile private var lastSkipLogMs = 0L
+
     fun init(afterBind: () -> Unit = {}) {
         onReady = afterBind
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
@@ -42,21 +46,33 @@ object XposedBridge {
     /** 落位：控件规则按应用切分，域名规则全存一份。 */
     fun land(byPkg: Map<String, List<String>>, domains: List<String>) {
         val s = svc ?: run {
-            Log.w("Wurao", "land skipped: XposedService not bound")
+            // 未绑定时日志降频，别刷屏拖垮 logcat
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastSkipLogMs > 5000) {
+                lastSkipLogMs = now
+                Log.w("Wurao", "land skipped: XposedService not bound")
+            }
             return
         }
         runCatching {
+            var changed = 0
             byPkg.forEach { (pkg, targets) ->
-                s.getRemotePreferences("wurao_rules_$pkg")
-                    .edit()
-                    .putString("rules", targets.joinToString("\n") { b64(it) })
-                    .commit()
+                val key = "wurao_rules_$pkg"
+                val content = targets.joinToString("\n") { b64(it) }
+                if (lastWritten[key] == content) return@forEach
+                s.getRemotePreferences(key).edit().putString("rules", content).commit()
+                lastWritten[key] = content
+                changed++
             }
-            s.getRemotePreferences("wurao_domains")
-                .edit()
-                .putString("domains", domains.joinToString("\n"))
-                .commit()
-            Log.i("Wurao", "landed ${byPkg.size} apps, ${domains.size} domains")
+            val domContent = domains.joinToString("\n")
+            if (lastWritten["wurao_domains"] != domContent) {
+                s.getRemotePreferences("wurao_domains")
+                    .edit().putString("domains", domContent).commit()
+                lastWritten["wurao_domains"] = domContent
+                changed++
+            }
+            if (changed > 0)
+                Log.i("Wurao", "landed ${byPkg.size} apps, ${domains.size} domains (changed=$changed)")
         }.onFailure { Log.w("Wurao", "land failed: ${it.javaClass.simpleName} ${it.message}") }
     }
 
