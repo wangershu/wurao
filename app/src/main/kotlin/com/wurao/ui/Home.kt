@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,11 +70,17 @@ fun HomeScreen() {
     val enabled = allRules.count { it.enabled }
     val todayCount = HitStore.all().size
 
-    val frameOk = CfgPush.bound
-    val services = Settings.Secure.getString(
-        ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ) ?: ""
-    val a11yOn = services.contains(ctx.packageName)
+    // 框架服务/无障碍可能在首帧之后才连上，普通 val 不会重组 →
+    // 之前会一直停在「未激活」。做成可观察状态，定时刷新到连上为止。
+    var frameOk by remember { mutableStateOf(CfgPush.bound) }
+    var a11yOn by remember { mutableStateOf(a11yEnabled(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            frameOk = CfgPush.bound
+            a11yOn = a11yEnabled(ctx)
+        }
+    }
     val ver = runCatching {
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
     }.getOrDefault("?") ?: "?"
