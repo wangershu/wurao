@@ -87,13 +87,13 @@ class FloatService : Service() {
                         SnapshotService.instance?.let { svc ->
                             val picks = svc.captureNow()
                             if (picks.isNotEmpty()) FrameOverlay.show(svc, picks) { pick, act ->
-                                val r = com.wurao.core.analyze.RuleGen
-                                    .rules(pick.pkg ?: "", pick.node, pick.container, act).first()
-                                com.wurao.core.store.RuleStore.upsert(r)
-                                Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} target=${r.target}")
+                                val rules = com.wurao.core.analyze.RuleGen
+                                    .rules(pick.pkg ?: "", pick.node, pick.container, act)
+                                rules.forEach { com.wurao.core.store.RuleStore.upsert(it) }
+                                Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} 共 ${rules.size} 条 target=${rules.firstOrNull()?.target}")
                                 // 写回 prefs（重启不丢）+ 推配置；规则落位由 RuleStore.persist 负责
                                 com.wurao.ui.Ui.pushRulesAsync(svc)
-                                android.widget.Toast.makeText(svc, "已存：${r.target}", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(svc, "已存 ${rules.size} 条：${rules.firstOrNull()?.target}", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         } ?: android.widget.Toast.makeText(this, "抓屏服务没开（去无障碍设置里开一下）", android.widget.Toast.LENGTH_SHORT).show()
                     }

@@ -196,8 +196,18 @@ object FrameOverlay {
             }
         }
 
+        /** 多个框重叠时选面积最小的（最细的那个控件），别一上来就选到大容器。 */
         private fun pickAt(x: Int, y: Int): SnapshotService.Pick? =
-            picks.reversed().firstOrNull { it.bounds.contains(x, y) }
+            picks.filter { it.bounds.contains(x, y) }
+                .minByOrNull { it.bounds.width().toLong() * it.bounds.height() }
+
+        private fun nodeLabel(n: com.wurao.core.analyze.RuleGen.NodeInfo): String {
+            val v = n.vid?.let { "vid=$it" }
+                ?: n.text?.takeIf { it.isNotBlank() }?.let { "text=$it" }
+                ?: n.desc?.takeIf { it.isNotBlank() }?.let { "desc=$it" }
+                ?: n.className.substringAfterLast('.')
+            return if (v.length > 28) v.take(28) + "…" else v
+        }
 
         private fun suggestFor(p: SnapshotService.Pick): Triple<String, String, Act> {
             val txt = p.node.text ?: p.node.desc ?: ""
@@ -235,6 +245,16 @@ object FrameOverlay {
                 textSize = 14f
                 setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 6))
             })
+            // 层级面包屑：看清当前选中的是哪一个，避免误选到外层容器
+            val crumb = p.container?.let { c ->
+                "${nodeLabel(c)}  ›  ${nodeLabel(p.node)}"
+            } ?: "${nodeLabel(p.node)}（没抓到父级信息）"
+            content.addView(TextView(ctx).apply {
+                text = "层级：$crumb"
+                setTextColor(0xFFBBBBBB.toInt())
+                textSize = 11f
+                setPadding(dp(ctx, 14), 0, dp(ctx, 14), dp(ctx, 6))
+            })
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
             btnRow.addView(chip(ctx, "按建议做", primary = true) {
                 onPick(p, actEnum)
@@ -256,6 +276,12 @@ object FrameOverlay {
                 // 真正的隐藏由引擎下次进入时做（view.visibility = GONE）。
                 FrameOverlay.hide(ctx)
             })
+            p.container?.let { c ->
+                btnRow.addView(chip(ctx, "选父一层") {
+                    // 想隐藏整块区域时用；父级没有更上一层信息，container 置空
+                    showSuggest(p.copy(node = c, container = null))
+                })
+            }
             btnRow.addView(chip(ctx, "取消") {
                 selected = null
                 content.removeAllViews()

@@ -91,7 +91,20 @@ class WuraoModule : XposedModule() {
         return cachedRules
     }
 
-    private fun hideRecursive(v: View, rules: List<String>) {
+    /**
+     * 后序遍历：先处理子 View，再检查自己。
+     * 命中「叶子」后其祖先不再检查，避免一个大容器把整片界面连带隐藏。
+     */
+    private fun hideRecursive(v: View, rules: List<String>): Boolean {
+        var childHit = false
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) {
+                // 不提前 return：同屏多个相同项都要隐藏
+                if (hideRecursive(v.getChildAt(i), rules)) childHit = true
+            }
+        }
+        // 子树里已经命中，说明目标是更细的控件，这个容器别再动
+        if (childHit) return true
         for (target in rules) {
             if (matchesTarget(target, v)) {
                 if (v.visibility != View.GONE) {
@@ -102,18 +115,47 @@ class WuraoModule : XposedModule() {
                     if (hiddenTargets.add("$currentPkg:$target"))
                         Log.i("Wurao", "hid $target in $currentPkg")
                 }
-                return
+                return true
             }
         }
-        if (v is ViewGroup) {
-            for (i in 0 until v.childCount) hideRecursive(v.getChildAt(i), rules)
-        }
+        return false
     }
 
-    /** 选择器匹配：RuleGen 生成的是降级链 `[vid="a"] << [text="b"]`，任一属性命中即算。 */
+    private val attrRegex = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]")
+
+    /**
+     * 关系选择器 `A << B` 的含义是「在 A 的后代里找 B」：
+     * - **只有右侧 B 才是要隐藏的目标**，左侧 A 是上下文约束；
+     * - A 用祖先链验证，避免同名文案在别处误伤。
+     * 之前把 A 的属性也当目标，结果 `[vid="bottom_tab_block"] << [desc="视频"]`
+     * 直接把整个底栏隐藏了。
+     */
     private fun matchesTarget(target: String, v: View): Boolean {
-        val attrs = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]").findAll(target).toList()
+        val selfPart = target.substringAfterLast("<<").trim()
+        val containerPart = target.takeIf { it.contains("<<") }
+            ?.substringBeforeLast("<<")?.trim()
+        val attrs = attrRegex.findAll(selfPart).toList()
         if (attrs.isEmpty()) return false
+        if (!attrHits(attrs, v)) return false
+        // 容器约束：祖先链里必须找得到 A；拿不到 parent（某些自绘界面）时放宽
+        if (!containerPart.isNullOrBlank()) {
+            val cAttrs = attrRegex.findAll(containerPart).toList()
+            if (cAttrs.isNotEmpty()) {
+                var p = v.parent
+                var seenParent = false
+                var found = false
+                while (p is View) {
+                    seenParent = true
+                    if (attrHits(cAttrs, p)) { found = true; break }
+                    p = p.parent
+                }
+                if (seenParent && !found) return false
+            }
+        }
+        return true
+    }
+
+    private fun attrHits(attrs: List<MatchResult>, v: View): Boolean {
         val txt = when (v) {
             is android.widget.TextView -> v.text?.toString() ?: ""
             else -> ""
@@ -123,7 +165,6 @@ class WuraoModule : XposedModule() {
             if (v.id != View.NO_ID) v.resources.getResourceEntryName(v.id) else null
         }.getOrNull() ?: ""
         val cls = v.javaClass.name.substringAfterLast('.')
-
         for (m in attrs) {
             val value = m.groupValues[2]
             val hit = when (m.groupValues[1]) {

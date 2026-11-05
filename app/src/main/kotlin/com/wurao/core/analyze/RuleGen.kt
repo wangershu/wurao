@@ -73,7 +73,7 @@ object RuleGen {
         container: NodeInfo? = null,
         act: Act = Act.HIDE,
         groupKey: String = "mine",
-    ): List<Rule> = candidates(node, container).mapIndexed { i, sel ->
+    ): List<Rule> = candidates(node, container).map { sel ->
         Rule(
             domain = Domain.NODE,
             target = sel,
@@ -81,7 +81,9 @@ object RuleGen {
             scope = Scope.App(pkg),
             origin = Origin.User,
             groupKey = groupKey,
-            ruleKey = i.toString(),
+            // 用选择器本身做 key：同一个 App 抓不同控件时不会互相覆盖，
+            // 重复抓同一个控件也不会翻倍
+            ruleKey = sel.hashCode().toString(),
             note = noteOf(node, act),
         )
     }
