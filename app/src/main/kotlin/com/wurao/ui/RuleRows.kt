@@ -1,12 +1,18 @@
 package com.wurao.ui
 
 import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,13 +23,10 @@ import androidx.compose.ui.window.Dialog
 import com.wurao.core.model.Rule
 import com.wurao.core.model.Scope
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 规则属于哪个应用；Global 用空串。 */
@@ -40,9 +43,10 @@ fun appLabelOf(ctx: Context, pkg: String): String =
     }.getOrDefault(pkg)
 
 /**
- * 一条规则的完整操作：备注、选择器、停用/恢复、改备注、删除。
- * 应用详情页和规则源页共用同一套，避免两处口径不一致。
+ * 一条规则：左边信息、右边启用开关；长按弹出「改备注 / 删除」。
+ * 开关本身就是状态，不用猜点了「停用」到底生效没有。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RuleRow(
     r: Rule,
@@ -52,48 +56,85 @@ fun RuleRow(
 ) {
     val ctx = LocalContext.current
     val pkg = ruleScopePkg(r)
+    var showMenu by remember { mutableStateOf(false) }
+    val titleColor = if (r.enabled) MiuixTheme.colorScheme.onSurface
+    else MiuixTheme.colorScheme.onSurfaceVariantSummary
+
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Row(
-            Modifier.padding(12.dp),
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { showMenu = true },
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     r.note.ifBlank { r.target },
                     fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurface,
+                    color = titleColor,
                 )
                 val where = if (pkg.isBlank()) "所有应用" else appLabelOf(ctx, pkg)
                 Text(
                     "$where · ${actCn(r.act)} · ${domainCn(r.domain.key)}" +
-                        if (!r.enabled) " · 已停用" else "",
+                        if (r.enabled) " · 已启用" else " · 已停用",
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 3.dp),
                 )
                 Text(
                     r.target,
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 3.dp),
                 )
             }
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(text = "改备注", onClick = onEditNote)
-                TextButton(text = if (r.enabled) "停用" else "恢复", onClick = onToggle)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = MiuixIcons.Delete,
-                    contentDescription = "删除这条规则",
-                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                )
+            Switch(
+                checked = r.enabled,
+                onCheckedChange = { onToggle() },
+            )
+        }
+    }
+
+    if (showMenu) {
+        Dialog(onDismissRequest = { showMenu = false }) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(
+                        r.note.ifBlank { r.target },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "长按菜单 · 开关控制是否生效",
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(text = "改备注", onClick = {
+                            showMenu = false
+                            onEditNote()
+                        })
+                        TextButton(text = "删除", onClick = {
+                            showMenu = false
+                            onDelete()
+                        })
+                    }
+                }
             }
         }
     }
 }
 
-/** 改备注弹框（应用详情页和规则源页共用）。 */
+/** 改备注弹框（长按菜单里的「改备注」用）。 */
 @Composable
 fun NoteEditDialog(
     rule: Rule?,

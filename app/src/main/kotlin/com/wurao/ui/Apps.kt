@@ -237,14 +237,7 @@ fun AppIcon(pkg: String) {
 @Composable
 fun AppDetailScreen(pkg: String) {
     val ctx = LocalContext.current
-    val hits = run {
-        Ui.hitRev
-        HitStore.forApp(pkg)
-    }
     var kinds by remember { mutableStateOf(Cfg.decodeKinds(Ui.prefs(ctx).getString(Cfg.riskKey(pkg), null))) }
-    var candidates by remember { mutableStateOf<List<AdComponentFinder.Candidate>>(emptyList()) }
-    var picked by remember { mutableStateOf(Cfg.decodeList(Ui.prefs(ctx).getString(Cfg.componentsKey(pkg), null)).toSet()) }
-    var scanNote by remember { mutableStateOf("") }
 
     val label = remember(pkg) {
         runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }
@@ -264,12 +257,6 @@ fun AppDetailScreen(pkg: String) {
         CfgPush.flush(ctx)
     }
 
-    fun savePicked(next: Set<String>) {
-        picked = next
-        Ui.prefs(ctx).edit().putString(Cfg.componentsKey(pkg), Cfg.encodeList(next)).apply()
-        CfgPush.flush(ctx)
-    }
-
     Kit.DetailPage(title = label, subtitle = pkg, onBack = { Navigator.back() }) {
         // ---------- 实体头 ----------
         item {
@@ -278,49 +265,9 @@ fun AppDetailScreen(pkg: String) {
             }
         }
 
-        // ---------- 命中的规则 ----------
-        item { Kit.Section("命中的规则", "${hits.size}") }
-        if (hits.isEmpty()) {
-            item { Kit.Empty("这个应用里还没动过手。用一阵子，拦过的东西会列在这里，可逐条停用。") }
-        } else {
-            item {
-                Kit.Note(
-                    "这个应用拦过 ${hits.sumOf { it.count }} 次，最后一次 ${timeAgo(hits.maxOf { it.lastAtMs })}"
-                )
-            }
-            items(hits, key = { "hit:" + it.ruleId }) { h ->
-                val rule = RuleStore.all().firstOrNull { it.id == h.ruleId }
-                val off = rule?.enabled == false
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(h.note, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface)
-                            Text(
-                                "${h.count} 次 · ${h.target}",
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        TextButton(
-                            text = if (off) "恢复" else "停用",
-                            onClick = {
-                                // 停用改规则本身（规则库只有一处）；停用不等于删除
-                                RuleStore.setEnabled(h.ruleId, off)
-                                Ui.pushRulesAsync(ctx)
-                                Ui.hitRev++
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
         // ---------- 这个应用的规则（删除/编辑会重新落位到 hook） ----------
         item { Kit.Section("这个应用的规则", "${myRules.size} 条自抓 · 订阅 $subCount 条") }
+        item { Kit.Note("开关控制规则是否生效；长按某条规则可以改备注或删除。") }
         if (myRules.isEmpty()) {
             item { Kit.Empty("这个应用还没有自己抓的规则。切过去点悬浮球抓一屏，选中的控件会存到这里。") }
         } else {
@@ -359,85 +306,21 @@ fun AppDetailScreen(pkg: String) {
             Kit.RowGroup {
                 Kit.PlainRow(
                     title = "全部退回",
-                    summary = "清掉这个应用的所有风险级开关与组件名单",
-                    onClick = { saveKinds(emptySet()); savePicked(emptySet()) },
+                    summary = "清掉这个应用的所有风险级开关",
+                    onClick = { saveKinds(emptySet()) },
                 )
             }
         }
 
-        // ---------- 抓屏 ----------
-        item { Kit.Section("还有广告？") }
-        item {
-            Kit.Note("点下面的按钮，然后切回这个应用 —— 控件会被橙框框出来，点哪个就治哪个（点空白处取消）。")
-        }
-        item {
-            if (!SnapshotService.active) {
-                Kit.ArrowItem(
-                    title = "抓屏服务没连上",
-                    summary = "Xposed 读不到别的 App 的界面，这层必须靠无障碍。若设置里已打开过，请关掉再打开一次 —— 更新 APK 会让服务失效。",
-                    onClick = {
-                        ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    },
-                )
-            } else {
-                Kit.ArrowItem(
-                    title = "抓一屏",
-                    summary = scanNote.ifBlank { "切到 $label，控件会被橙框框出来，点一下生成规则" },
-                    onClick = {
-                        SnapshotService.wantPkg = pkg
-                        SnapshotService.wantCapture = true
-                        scanNote = "已就绪：切到 $label，控件会被橙框框出来，点一下就选中并生成规则"
-                    },
-                )
-            }
-        }
-
-        // ---------- 自动分析 ----------
-        item { Kit.Section("自动分析") }
+        // ---------- 自动分析（子页面） ----------
         item {
             Kit.ArrowItem(
-                title = "扫一下这个 App",
-                summary = "本地扫它的组件挖广告候选，不需要目标进程被 hook",
-                onClick = {
-                    val comps = runCatching {
-                        val info = ctx.packageManager.getPackageInfo(
-                            pkg,
-                            PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or
-                                PackageManager.GET_PROVIDERS or PackageManager.GET_RECEIVERS,
-                        )
-                        buildList {
-                            info.activities?.forEach { add("activity" to it.name) }
-                            info.services?.forEach { add("service" to it.name) }
-                            info.providers?.forEach { add("provider" to it.name) }
-                            info.receivers?.forEach { add("receiver" to it.name) }
-                        }
-                    }.getOrDefault(emptyList())
-                    candidates = AdComponentFinder.find(comps)
-                    scanNote = "扫到 ${comps.size} 个组件，候选 ${candidates.size} 条（仅供参考，需要你勾选）"
-                },
+                title = "自动分析",
+                summary = "本地扫组件挖广告候选，进子页面看结果",
+                onClick = { Navigator.go(Dest.AppAnalysis(pkg)) },
             )
         }
-        if (candidates.isNotEmpty()) {
-            item { Kit.Note(scanNote) }
-            item {
-                Kit.RowGroup {
-                    candidates.forEach { c ->
-                        val on = picked.contains(c.name)
-                        Kit.PlainRow(
-                            title = c.name.substringAfterLast('.'),
-                            summary = (if (c.level == AdComponentFinder.Level.INFRA) "⚠ 基础设施：${c.reason}" else c.reason),
-                            onClick = { savePicked(if (on) picked - c.name else picked + c.name) },
-                            end = {
-                                top.yukonga.miuix.kmp.basic.Switch(
-                                    checked = on,
-                                    onCheckedChange = { savePicked(if (it) picked + c.name else picked - c.name) },
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        }
+
     }
 
     ConfirmDialog(

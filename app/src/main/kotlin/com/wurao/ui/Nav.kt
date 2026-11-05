@@ -20,8 +20,10 @@ sealed interface Dest {
     data object Settings : Dest
 
     // ---- 应用 ----
-    /** 应用详情：风险级开关 + 抓屏 + 自动分析 + 该应用的命中 */
+    /** 应用详情：风险级开关 + 该应用的规则 */
     data class AppDetail(val pkg: String) : Dest
+    /** 自动分析子页面：扫组件挖广告候选 */
+    data class AppAnalysis(val pkg: String) : Dest
 
     // ---- 主页下挂 ----
     /** 命中记录（主页「今日拦截」统计卡的二级页） */

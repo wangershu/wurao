@@ -358,6 +358,9 @@ class MainActivity : ComponentActivity() {
                 "backup" -> Navigator.jump(Dest.Backup, Navigator.Tab.SETTINGS)
                 "appearance" -> Navigator.jump(Dest.Appearance, Navigator.Tab.SETTINGS)
                 "about" -> Navigator.jump(Dest.About, Navigator.Tab.SETTINGS)
+                "analysis" -> intent?.getStringExtra("open_pkg")?.takeIf { it.isNotBlank() }?.let {
+                    Navigator.jump(Dest.AppAnalysis(it), Navigator.Tab.APPS)
+                }
             }
             return false
         }
@@ -464,6 +467,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             when (val d = Navigator.current) {
                                 is Dest.AppDetail -> AppDetailScreen(d.pkg)
+                                is Dest.AppAnalysis -> AppAnalysisScreen(d.pkg)
                                 Dest.Hits -> HitsScreen()
                                 Dest.Sources -> SourcesScreen()
                                 Dest.Backup -> BackupScreen()

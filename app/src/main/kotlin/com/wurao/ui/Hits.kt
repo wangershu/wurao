@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.wurao.core.store.RuleStore
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -37,6 +37,7 @@ fun HitsScreen() {
 
     Kit.DetailPage(title = "今日拦截", onBack = { Navigator.back() }) {
         item { Kit.Note("同一条规则反复命中只占一行（只涨次数），所以开一天 App 也不会刷屏。") }
+        item { Kit.Note("右边的开关停用的是规则本身，应用详情页里的规则开关会同步变化。") }
         if (rows.isEmpty()) {
             item { Kit.Empty("还没有记录。目标 App 里真的动手之后，记录会从它的进程送回来。", "刷新") { Ui.hitRev++ } }
         } else {
@@ -64,12 +65,14 @@ fun HitsScreen() {
                             )
                         }
                         Spacer(Modifier.width(10.dp))
-                        TextButton(
-                            text = if (off) "恢复" else "停用",
-                            onClick = {
+                        Switch(
+                            checked = !off,
+                            onCheckedChange = {
+                                // 映射到规则库：与应用详情页同一个状态源
                                 RuleStore.setEnabled(r.ruleId, off)
                                 Ui.pushRulesAsync(ctx)
                                 Ui.hitRev++
+                                Ui.ruleRev++
                             },
                         )
                     }
