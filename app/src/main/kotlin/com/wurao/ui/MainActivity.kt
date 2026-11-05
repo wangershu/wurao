@@ -99,7 +99,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        com.wurao.core.XposedBridge.init { com.wurao.core.store.RuleStore.reland() }
+        com.wurao.core.XposedBridge.init()
+        com.wurao.core.XposedBridge.onBind { com.wurao.core.store.RuleStore.reland() }
         // 备份页的两个按钮接到 SAF 启动器上
         BackupBridge.onExportClick = {
             val day = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)

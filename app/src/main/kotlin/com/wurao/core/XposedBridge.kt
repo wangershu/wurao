@@ -16,20 +16,24 @@ import io.github.libxposed.service.XposedServiceHelper
 object XposedBridge {
 
     @Volatile private var svc: XposedService? = null
-    @Volatile private var onReady: (() -> Unit)? = null
+
+    /**
+     * XposedServiceHelper 的 mListener 是**单值**：后注册会覆盖先注册的。
+     * 所以整个 App 只能有一处 registerListener，其他模块用 onBind 订阅回调。
+     */
+    private val bindCallbacks =
+        java.util.concurrent.CopyOnWriteArrayList<(XposedService) -> Unit>()
 
     /** 上次写入的内容，内容没变就不重复写（避免几十次同步 binder 提交）。 */
     private val lastWritten = java.util.concurrent.ConcurrentHashMap<String, String>()
     @Volatile private var lastSkipLogMs = 0L
 
-    fun init(afterBind: () -> Unit = {}) {
-        onReady = afterBind
+    fun init() {
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
             override fun onServiceBind(s: XposedService) {
                 svc = s
                 Log.i("Wurao", "XposedService bound, scope=${runCatching { s.scope }.getOrNull()?.size}")
-
-                onReady?.invoke()
+                bindCallbacks.forEach { cb -> runCatching { cb(s) } }
             }
 
             override fun onServiceDied(s: XposedService) {
@@ -37,6 +41,15 @@ object XposedBridge {
             }
         })
     }
+
+    /** 订阅绑定事件；若已绑定则立即回放一次（解决注册时序问题）。 */
+    fun onBind(cb: (XposedService) -> Unit) {
+        bindCallbacks += cb
+        svc?.let { runCatching { cb(it) } }
+    }
+
+    /** 给 CfgPush 等模块复用同一个 service。 */
+    fun current(): XposedService? = svc
 
     /** LSPosed 里勾选的应用；拿不到时返回空（表示不过滤）。 */
     fun scope(): Set<String> = runCatching { svc?.scope?.toSet() ?: emptySet() }.getOrDefault(emptySet())

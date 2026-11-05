@@ -43,18 +43,30 @@ object RuleStore {
     }
 
     /**
-     * 变更后重新落位（去抖 500ms）。
-     * 导入订阅是逐条 upsert（几万条），不能每次都全量扫描 + 落位 —— 之前就是
-     * 这样把 CPU 打满导致 ANR。合并成一次。
+     * 变更后重新落位（合并不重建）。
+     * 导入订阅是逐条 upsert（几万条），每次都 cancel+launch 一个协程也会把启动拖慢；
+     * 这里只置脏标记，已有待执行任务就直接复用，落位后若期间又有改动再跑一轮，
+     * 保证最终态一定落位。
      */
+    @Volatile private var batching = false
+    @Volatile private var dirty = false
     @Volatile private var pendingJob: Job? = null
 
+    /** 批量导入/启动恢复期间关掉落位，结束统一一次。 */
+    fun beginBatch() { batching = true }
+    fun endBatch() { batching = false; persist() }
+
     private fun persist() {
+        if (batching) return
+        dirty = true
         synchronized(this) {
-            pendingJob?.cancel()
+            if (pendingJob?.isActive == true) return
             pendingJob = ioScope.launch {
-                delay(500)
-                doLand()
+                while (dirty) {
+                    dirty = false
+                    delay(300)
+                    if (!batching) doLand()
+                }
             }
         }
     }

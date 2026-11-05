@@ -59,17 +59,23 @@ object Ui {
      * 你已经配好的规则不能因为这次统一而丢掉。
      */
     fun restoreRules(ctx: Context) {
-        val unified = Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_RULES, null))
-        if (unified.isNotEmpty()) {
-            unified.forEach { RuleStore.upsert(it) }
-            return
+        // 逐条 upsert 几万条时别反复落位：整批包起来，结束统一一次
+        RuleStore.beginBatch()
+        try {
+            val unified = Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_RULES, null))
+            if (unified.isNotEmpty()) {
+                unified.forEach { RuleStore.upsert(it) }
+                return
+            }
+            val legacy = Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_USER_RULES, null)) +
+                Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_SUB_RULES, null))
+            if (legacy.isEmpty()) return
+            legacy.forEach { RuleStore.upsert(it) }
+            pushRulesAsync(ctx)
+            Log.i("Wurao", "规则迁移：${legacy.size} 条 -> 统一键")
+        } finally {
+            RuleStore.endBatch()
         }
-        val legacy = Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_USER_RULES, null)) +
-            Cfg.decodeRules(prefs(ctx).getString(Cfg.KEY_SUB_RULES, null))
-        if (legacy.isEmpty()) return
-        legacy.forEach { RuleStore.upsert(it) }
-        pushRulesAsync(ctx)
-        Log.i("Wurao", "规则迁移：${legacy.size} 条 -> 统一键")
     }
 
     /**
