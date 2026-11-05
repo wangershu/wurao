@@ -65,7 +65,9 @@ object XposedBridge {
                 changed++
             }
             val domContent = domains.joinToString("\n")
-            if (lastWritten["wurao_domains"] != domContent) {
+            // 域名表为空时不覆盖已有数据：订阅导入中间态可能读不到域名文件，
+            // 之前就是这样把 3.4 万条域名冲成空串的
+            if (domContent.isNotBlank() && lastWritten["wurao_domains"] != domContent) {
                 s.getRemotePreferences("wurao_domains")
                     .edit().putString("domains", domContent).commit()
                 lastWritten["wurao_domains"] = domContent
