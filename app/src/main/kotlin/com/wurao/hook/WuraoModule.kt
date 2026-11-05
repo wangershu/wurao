@@ -22,6 +22,7 @@ class WuraoModule : XposedModule() {
     @Volatile private var lastLoadMs = 0L
     private var currentPkg = ""
     private val hiddenTargets = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val containerMissLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val blockedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     @Volatile private var domainSet: Set<String> = emptySet()
@@ -149,7 +150,10 @@ class WuraoModule : XposedModule() {
                     if (attrHits(cAttrs, p)) { found = true; break }
                     p = p.parent
                 }
-                if (seenParent && !found) return false
+                // 无障碍节点树的层级和 View 树不一定一致（容器 vid 常对不上）。
+                // 找不到时降级：仍按右侧自身属性命中 —— 否则带 << 的规则几乎总不生效。
+                if (seenParent && !found && containerMissLogged.add(target))
+                    Log.i("Wurao", "container miss, fallback: $target")
             }
         }
         return true

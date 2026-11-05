@@ -158,6 +158,9 @@ object FrameOverlay {
 
         var panelContent: LinearLayout? = null
         private var selected: SnapshotService.Pick? = null
+        /** 同一点命中的全部层级，按面积从细到粗；0 = 最细的控件。 */
+        private var levelPicks: List<SnapshotService.Pick> = emptyList()
+        private var levelIndex = 0
         private var touchX = -1f
         private var touchY = -1f
 
@@ -221,8 +224,13 @@ object FrameOverlay {
             if (e.action == MotionEvent.ACTION_UP) { touchX = -1f; touchY = -1f }
             invalidate()
             if (e.action != MotionEvent.ACTION_UP) return true
-            val hit = pickAt(e.x.toInt(), e.y.toInt())
+            val x = e.x.toInt(); val y = e.y.toInt()
+            levelPicks = picks.filter { it.bounds.contains(x, y) }
+                .sortedBy { it.bounds.width().toLong() * it.bounds.height() }
+            levelIndex = 0
+            val hit = levelPicks.firstOrNull()
             if (hit == null) {
+                levelPicks = emptyList()
                 selected = null
                 panelContent?.removeAllViews()
                 invalidate()
@@ -245,17 +253,21 @@ object FrameOverlay {
                 textSize = 14f
                 setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 6))
             })
-            // 层级面包屑：看清当前选中的是哪一个，避免误选到外层容器
-            val crumb = p.container?.let { c ->
-                "${nodeLabel(c)}  ›  ${nodeLabel(p.node)}"
-            } ?: "${nodeLabel(p.node)}（没抓到父级信息）"
+            // 层级面包屑：当前层 + 往上两层，看清选中的是哪一层
+            val total = levelPicks.size.coerceAtLeast(1)
+            val chain = levelPicks.drop(levelIndex).take(3)
+                .mapIndexed { i, pk ->
+                    if (i == 0) "[${nodeLabel(pk.node)}]" else nodeLabel(pk.node)
+                }.joinToString(" › ")
             content.addView(TextView(ctx).apply {
-                text = "层级：$crumb"
+                text = "层级 ${levelIndex + 1}/$total：$chain"
                 setTextColor(0xFFBBBBBB.toInt())
                 textSize = 11f
                 setPadding(dp(ctx, 14), 0, dp(ctx, 14), dp(ctx, 6))
             })
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+            if (levelIndex > 0) btnRow.addView(chip(ctx, "− 细") { moveLevel(-1) })
+            if (levelIndex < levelPicks.lastIndex) btnRow.addView(chip(ctx, "+ 粗") { moveLevel(1) })
             btnRow.addView(chip(ctx, "按建议做", primary = true) {
                 onPick(p, actEnum)
                 val svc = com.wurao.assist.SnapshotService.instance
@@ -276,18 +288,24 @@ object FrameOverlay {
                 // 真正的隐藏由引擎下次进入时做（view.visibility = GONE）。
                 FrameOverlay.hide(ctx)
             })
-            p.container?.let { c ->
-                btnRow.addView(chip(ctx, "选父一层") {
-                    // 想隐藏整块区域时用；父级没有更上一层信息，container 置空
-                    showSuggest(p.copy(node = c, container = null))
-                })
-            }
             btnRow.addView(chip(ctx, "取消") {
                 selected = null
+                levelPicks = emptyList()
+                levelIndex = 0
                 content.removeAllViews()
                 invalidate()
             })
             content.addView(btnRow)
+        }
+
+        /** 前后连续调层级：往细（−）或往粗（+），可以一直点到想要的那一层。 */
+        private fun moveLevel(delta: Int) {
+            val next = (levelIndex + delta).coerceIn(0, levelPicks.lastIndex)
+            if (next == levelIndex || levelPicks.isEmpty()) return
+            levelIndex = next
+            selected = levelPicks[next]
+            showSuggest(selected!!)
+            invalidate()
         }
     }
 }
