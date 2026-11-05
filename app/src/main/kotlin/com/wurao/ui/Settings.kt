@@ -352,7 +352,7 @@ fun SourcesScreen() {
         // 规则按来源分组显示。**不能逐条铺开**：库里两万条（大半是广告域名），
         // 一次性组合两万个 Card 会把界面压死。只有你自己抓的那几条才逐条列。
         val mine = rules.filter { it.origin is Origin.User }
-        val groups = rules.filter { it.origin !is Origin.User }
+        val groups = rules.filter { it.origin !is Origin.User && it.domain != Domain.HOST }
             .groupBy { r ->
                 when (val o = r.origin) {
                     is Origin.Subscription -> "订阅#" + o.subsId + "：" + r.groupKey
@@ -362,50 +362,38 @@ fun SourcesScreen() {
                 }
             }
 
-        if (mine.isNotEmpty()) {
-            item { Kit.Section("我自己抓的", "${mine.size} 条") }
-            items(mine, key = { it.id }) { r ->
+        // ---------- 域名规则（DNS 拦截）：整份可删 ----------
+        val dnsRules = rules.filter { it.domain == Domain.HOST }
+        // 域名表主体在 files/adclose.txt，不一定进规则库，按文件统计条数
+        val dnsFile = java.io.File(ctx.filesDir, "adclose.txt")
+        val dnsFileCount = runCatching {
+            if (dnsFile.exists()) dnsFile.readLines().count { it.isNotBlank() } else 0
+        }.getOrDefault(0)
+        val dnsTotal = dnsFileCount + dnsRules.size
+        android.util.Log.i("Wurao", "规则源: 域名 $dnsTotal 条 / 订阅 ${groups.size} 份 / 订阅规则 ${groups.values.sumOf { it.size }} 条")
+        if (dnsTotal > 0) {
+            item { Kit.Section("域名规则（DNS 拦截）", "$dnsTotal 条") }
+            item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            // 备注是主标题：一眼知道这条规则干嘛的
+                            Text("广告域名表", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface)
                             Text(
-                                r.note.ifBlank { r.target },
-                                fontSize = 14.sp,
-                                color = MiuixTheme.colorScheme.onSurface,
-                            )
-                            val p = when (val sc = r.scope) {
-                                is Scope.App -> sc.pkg
-                                is Scope.Component -> sc.pkg
-                                Scope.Global -> "所有应用"
-                            }
-                            Text(
-                                "$p · ${actCn(r.act)} · ${domainCn(r.domain.key)}",
+                                "$dnsTotal 条 · 命中后解析到 0.0.0.0",
                                 fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                            Text(
-                                r.target,
-                                fontSize = 11.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(top = 2.dp),
                             )
                         }
-                        TextButton(text = "改备注", onClick = {
-                            editNote = r
-                            noteDraft = r.note
+                        TextButton(text = "清空", onClick = {
+                            dnsRules.forEach { RuleStore.remove(it.id) }
+                            ctx.deleteFile("adclose.txt")
+                            com.wurao.core.XposedBridge.clearDomains()
+                            save()
+                            Ui.ruleRev++
                         })
-                        IconButton(onClick = { confirmDel = r }) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除这条规则",
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                            )
-                        }
                     }
                 }
             }

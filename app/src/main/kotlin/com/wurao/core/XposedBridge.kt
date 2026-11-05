@@ -66,6 +66,14 @@ object XposedBridge {
      * 是「进程启动那一刻的快照」，App 侧后续写入刷新不过去（实测写侧
      * commit ok=true、hook 侧读到 0 条）。远程文件写完目标进程立刻能读到。
      */
+    /** 清空已落位的域名表（规则源页「清空」用）。 */
+    fun clearDomains() {
+        runCatching {
+            svc?.deleteRemoteFile("wurao_domains")
+            lastWritten.remove("wurao_domains")
+        }
+    }
+
     fun land(byPkg: Map<String, List<String>>, domains: List<String>) {
         val s = svc ?: run {
             val now = android.os.SystemClock.elapsedRealtime()

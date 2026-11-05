@@ -35,6 +35,8 @@ import com.wurao.core.RiskGate
 import com.wurao.core.analyze.AdComponentFinder
 import com.wurao.core.analyze.RuleGen
 import com.wurao.core.model.Act
+import com.wurao.core.model.Origin
+import com.wurao.core.model.Rule
 import com.wurao.core.store.RuleStore
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -248,6 +250,13 @@ fun AppDetailScreen(pkg: String) {
         runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }
             .getOrDefault(pkg)
     }
+    // 这个应用的规则：自抓的逐条可管，订阅的只报条数（几万条不铺开）
+    val appRules = run { Ui.ruleRev; RuleStore.all().filter { ruleScopePkg(it) == pkg } }
+    val myRules = appRules.filter { it.origin is Origin.User }
+    val subCount = appRules.size - myRules.size
+    var editNote by remember { mutableStateOf<Rule?>(null) }
+    var noteDraft by remember { mutableStateOf("") }
+    var confirmDel by remember { mutableStateOf<Rule?>(null) }
 
     fun saveKinds(next: Set<RiskGate.Kind>) {
         kinds = next
@@ -279,7 +288,7 @@ fun AppDetailScreen(pkg: String) {
                     "这个应用拦过 ${hits.sumOf { it.count }} 次，最后一次 ${timeAgo(hits.maxOf { it.lastAtMs })}"
                 )
             }
-            items(hits, key = { it.ruleId }) { h ->
+            items(hits, key = { "hit:" + it.ruleId }) { h ->
                 val rule = RuleStore.all().firstOrNull { it.id == h.ruleId }
                 val off = rule?.enabled == false
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -307,6 +316,25 @@ fun AppDetailScreen(pkg: String) {
                         )
                     }
                 }
+            }
+        }
+
+        // ---------- 这个应用的规则（删除/编辑会重新落位到 hook） ----------
+        item { Kit.Section("这个应用的规则", "${myRules.size} 条自抓 · 订阅 $subCount 条") }
+        if (myRules.isEmpty()) {
+            item { Kit.Empty("这个应用还没有自己抓的规则。切过去点悬浮球抓一屏，选中的控件会存到这里。") }
+        } else {
+            items(myRules, key = { "rule:" + it.id }) { r ->
+                RuleRow(
+                    r = r,
+                    onEditNote = { editNote = r; noteDraft = r.note },
+                    onDelete = { confirmDel = r },
+                    onToggle = {
+                        RuleStore.setEnabled(r.id, !r.enabled)
+                        Ui.pushRulesAsync(ctx)
+                        Ui.ruleRev++
+                    },
+                )
             }
         }
 
@@ -411,6 +439,32 @@ fun AppDetailScreen(pkg: String) {
             }
         }
     }
+
+    ConfirmDialog(
+        show = confirmDel != null,
+        title = "删掉这条规则？",
+        text = confirmDel?.target ?: "",
+        confirmText = "删掉",
+        onDismiss = { confirmDel = null },
+        onConfirm = {
+            confirmDel?.let { RuleStore.remove(it.id) }
+            confirmDel = null
+            Ui.pushRulesAsync(ctx)
+            Ui.ruleRev++
+        },
+    )
+    NoteEditDialog(
+        rule = editNote,
+        draft = noteDraft,
+        onDraft = { noteDraft = it },
+        onDismiss = { editNote = null },
+        onSave = { r, text ->
+            RuleStore.setNote(r.id, text)
+            editNote = null
+            Ui.pushRulesAsync(ctx)
+            Ui.ruleRev++
+        },
+    )
 }
 
 private fun riskHint(kind: RiskGate.Kind): String = when (kind) {
