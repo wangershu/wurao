@@ -96,6 +96,11 @@ class FloatService : Service() {
                                 }.forEach { com.wurao.core.store.RuleStore.remove(it.id) }
                                 rules.forEach { com.wurao.core.store.RuleStore.upsert(it) }
                                 Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} 共 ${rules.size} 条 target=${rules.firstOrNull()?.target}")
+                                Log.i(
+                                    "Wurao",
+                                    "抓屏节点 vid=${pick.node.vid} text=${pick.node.text} desc=${pick.node.desc} " +
+                                        "cls=${pick.node.className} | 父 vid=${pick.container?.vid} cls=${pick.container?.className}",
+                                )
                                 // 写回 prefs（重启不丢）+ 推配置；规则落位由 RuleStore.persist 负责
                                 com.wurao.ui.Ui.pushRulesAsync(svc)
                                 android.widget.Toast.makeText(svc, "已存 ${rules.size} 条：${rules.firstOrNull()?.target}", android.widget.Toast.LENGTH_SHORT).show()

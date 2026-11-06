@@ -225,8 +225,15 @@ object FrameOverlay {
             invalidate()
             if (e.action != MotionEvent.ACTION_UP) return true
             val x = e.x.toInt(); val y = e.y.toInt()
+            // 有标识（vid/text/desc）的层优先，其次才按面积从细到粗：
+            // 否则默认会落到最细的无标识容器上，明明有 ad_container 也抓不到
             levelPicks = picks.filter { it.bounds.contains(x, y) }
-                .sortedBy { it.bounds.width().toLong() * it.bounds.height() }
+                .sortedWith(
+                    compareByDescending<SnapshotService.Pick> {
+                        !it.node.vid.isNullOrBlank() || !it.node.text.isNullOrBlank() ||
+                            !it.node.desc.isNullOrBlank()
+                    }.thenBy { it.bounds.width().toLong() * it.bounds.height() }
+                )
             levelIndex = 0
             val hit = levelPicks.firstOrNull()
             if (hit == null) {

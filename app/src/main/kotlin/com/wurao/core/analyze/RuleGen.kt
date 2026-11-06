@@ -52,15 +52,17 @@ object RuleGen {
         node.desc?.takeIf { it.isNotBlank() }?.let { selfSelectors += "[desc=\"$it\"]" }
         // 类名兜底**只在没有任何更好特征时才用**：底栏里往往有好几个同类型的 View，
         // 按类名选会选错（实测过），所以有文案/id 就绝不加这一级。
-        if (selfSelectors.isEmpty()) {
-            // 自绘 App（如摩托范）的节点只有 className，纯类名会命中满屏同类 View。
-            // 有屏幕区域时优先按位置锁定，类名只留作兜底。
+        val noSelfId = selfSelectors.isEmpty()
+        if (noSelfId) {
+            // 自己没有 text/desc/vid 时，先借容器的资源 id —— 它比绝对坐标抗滚动、
+            // 比通用类名精确。摩托范的 ad_container 就是这种情况。
+            container?.vid?.takeIf { it.isNotBlank() }?.let { selfSelectors += "[vid=\"$it\"]" }
             node.rect?.takeIf { it.isNotBlank() }?.let { selfSelectors += "[rect=\"$it\"]" }
             selfSelectors += "[name=\"${node.className}\"]"
         }
 
-        // ① 容器 + 自身属性（最稳，优先）
-        if (containerSel != null) selfSelectors.forEach { out += "$containerSel << $it" }
+        // ① 容器 + 自身属性（最稳，优先）。自身标识本来就借自容器时不再叠 <<
+        if (containerSel != null && !noSelfId) selfSelectors.forEach { out += "$containerSel << $it" }
         // ② 只用自身属性（容器改版了还能用）
         out += selfSelectors
 

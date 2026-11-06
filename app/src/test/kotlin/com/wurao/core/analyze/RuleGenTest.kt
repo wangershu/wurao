@@ -146,4 +146,12 @@ class RuleGenTest {
         val node = RuleGen.NodeInfo(className = "android.widget.TextView")
         assertEquals("[name=\"android.widget.TextView\"]", RuleGen.candidates(node, null).first())
     }
+
+    @Test
+    fun 自身无标识但容器有资源id时借容器id() {
+        val node = RuleGen.NodeInfo(className = "android.widget.RelativeLayout", rect = "45,903,1155,1643")
+        val container = RuleGen.NodeInfo(className = "android.widget.FrameLayout", vid = "ad_container")
+        val sels = RuleGen.candidates(node, container)
+        assertEquals("[vid=\"ad_container\"]", sels.first())
+    }
 }
