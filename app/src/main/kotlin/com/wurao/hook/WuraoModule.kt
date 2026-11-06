@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import com.wurao.core.analyze.RectMatch
 import java.net.InetAddress
 
 /**
@@ -25,6 +26,8 @@ class WuraoModule : XposedModule() {
     private val containerMissLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val blockedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
+    @Volatile private var lastRectMs = 0L
+    private val rectHits = java.util.concurrent.ConcurrentHashMap<String, View>()
     @Volatile private var domainSet: Set<String> = emptySet()
     @Volatile private var domainsLoaded = false
     @Volatile private var lastDomainMs = 0L
@@ -73,7 +76,13 @@ class WuraoModule : XposedModule() {
         val rules = loadHideRules(pkg)
         if (rules.isEmpty()) return
         currentPkg = pkg
-        hideRecursive(vg, rules)
+
+        // 带 rect 的规则：全树找跟框选区域最吻合的 View，整块隐藏。
+        // 不带 rect 的规则（vid/text/desc）：走原来的属性匹配，行为一字不改。
+        val plain = rules.filterNot { rectRegex.containsMatchIn(it) }
+        if (plain.isNotEmpty()) hideRecursive(vg, plain)
+        val rects = rules.filter { rectRegex.containsMatchIn(it) }
+        if (rects.isNotEmpty()) hideByRect(vg, rects)
     }
 
     /** 读本应用的规则（按应用切分，2 秒节流）。 */
@@ -92,24 +101,22 @@ class WuraoModule : XposedModule() {
         return cachedRules
     }
 
-    /**
-     * 后序遍历：先处理子 View，再检查自己。
-     * 命中「叶子」后其祖先不再检查，避免一个大容器把整片界面连带隐藏。
-     */
+    /** 属性规则（vid/text/desc）：后序遍历命中即 GONE，与旧行为完全一致。 */
     private fun hideRecursive(v: View, rules: List<String>): Boolean {
         var childHit = false
         if (v is ViewGroup) {
             for (i in 0 until v.childCount) {
-                // 不提前 return：同屏多个相同项都要隐藏
                 if (hideRecursive(v.getChildAt(i), rules)) childHit = true
             }
         }
-        // 子树里已经命中，说明目标是更细的控件，这个容器别再动
         if (childHit) return true
         for (target in rules) {
             if (matchesTarget(target, v)) {
                 if (v.visibility != View.GONE) {
-                    hideWholeTapTarget(v)
+                    v.visibility = View.GONE
+                    v.layoutParams?.let { lp ->
+                        runCatching { lp.width = 0; lp.height = 0; v.layoutParams = lp }
+                    }
                     if (hiddenTargets.add("$currentPkg:$target"))
                         Log.i("Wurao", "hid $target in $currentPkg")
                 }
@@ -119,32 +126,84 @@ class WuraoModule : XposedModule() {
         return false
     }
 
-    /**
-     * 只把命中的叶子 GONE 掉不够：底栏 tab 的图标/文字没了，但可点击的
-     * tab 容器还在，看着消失却仍然点得到。这里向上找最近的可点击祖先一起隐藏。
-     *
-     * 面积守卫：祖先不能超过命中 View 的 2 倍，否则就是整条底栏 / 整块页面，
-     * 绝不能动（懂车帝 TabWidget 实测约 5 倍）。
-     */
-    private fun hideWholeTapTarget(v: View) {
-        var target = v
-        val base = (v.width.toLong() * v.height).coerceAtLeast(1)
-        var p = v.parent
-        while (p is View) {
-            val area = p.width.toLong() * p.height
-            if (area > base * 2L) break
-            if (p.isClickable || p.isLongClickable) {
-                target = p
-                break
+    /** 从任意 ViewGroup 找到窗口根，再从根收集全部 View（dispatchDraw 传进来的可能只是子树）。 */
+    private fun rootOf(v: View): View {
+        var p = v
+        while (p.parent is View) p = p.parent as View
+        return p
+    }
+
+    private fun collect(v: View, out: MutableList<View>) {
+        out.add(v)
+        if (v is ViewGroup) for (i in 0 until v.childCount) collect(v.getChildAt(i), out)
+    }
+
+    /** 纯几何选 View：IoU 最大且过阈值，隐藏整块（不是只 GONE 一个子 View）。 */
+    private fun hideByRect(vg: ViewGroup, rects: List<String>) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val allowScan = now - lastRectMs >= 300   // 全树扫描节流
+        if (allowScan) lastRectMs = now
+        val loc = IntArray(2)
+        val views: List<View> by lazy {
+            ArrayList<View>(160).also { collect(rootOf(vg), it) }
+        }
+
+        for (target in rects) {
+            val raw = rectRegex.find(target)?.groupValues?.get(1) ?: continue
+            val box = RectMatch.parse(raw) ?: continue
+
+            // 已选中的 View：每帧强制 GONE（列表/TabWidget 会重建或恢复子 View）。
+            // 同时校验位置，布局变了就丢弃缓存重新扫描。
+            val cached = rectHits[target]
+            if (cached != null && cached.isAttachedToWindow) {
+                runCatching { cached.getLocationOnScreen(loc) }
+                val score = RectMatch.iou(
+                    RectMatch.of(loc[0], loc[1], loc[0] + cached.width, loc[1] + cached.height), box
+                )
+                if (score >= 0.55f) {
+                    forceGone(cached, target)
+                    continue
+                }
+                rectHits.remove(target)
             }
-            p = p.parent
+            if (!allowScan) continue
+
+            var best: View? = null
+            var bestScore = 0f
+            for (v in views) {
+                if (v.visibility == View.GONE || v.width <= 0 || v.height <= 0) continue
+                runCatching { v.getLocationOnScreen(loc) }
+                val score = RectMatch.iou(
+                    RectMatch.of(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height), box
+                )
+                if (score > bestScore) { bestScore = score; best = v }
+            }
+            // 0.55 = 跟框基本重合：tab 容器≈1.0，图标≈0.1，整条底栏≈0.2
+            val hit = best
+            if (hit != null && bestScore >= 0.55f) {
+                rectHits[target] = hit
+                if (hiddenTargets.add("$currentPkg:probe:$target"))
+                    Log.i(
+                        "Wurao",
+                        "rect 命中 view=${hit.javaClass.name} size=${hit.width}x${hit.height} " +
+                            "iou=$bestScore target=$target",
+                    )
+                forceGone(hit, target)
+            }
         }
-        target.visibility = View.GONE
-        target.isClickable = false
-        target.isEnabled = false
-        target.layoutParams?.let { lp ->
-            runCatching { lp.width = 0; lp.height = 0; target.layoutParams = lp }
+    }
+
+    private fun forceGone(v: View, target: String) {
+        if (v.visibility != View.GONE) v.visibility = View.GONE
+        v.isClickable = false
+        v.isEnabled = false
+        v.layoutParams?.let { lp ->
+            if (lp.width != 0 || lp.height != 0) {
+                runCatching { lp.width = 0; lp.height = 0; v.layoutParams = lp }
+            }
         }
+        if (hiddenTargets.add("$currentPkg:$target"))
+            Log.i("Wurao", "hid $target in $currentPkg (rect)")
     }
 
     private val attrRegex = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]")
