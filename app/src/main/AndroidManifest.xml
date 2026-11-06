@@ -58,6 +58,13 @@
             <service
             android:name=".assist.FloatService"
             android:exported="false" />
+        <!-- 命中回传：目标进程 insert，界面 query。exported 必须开 -->
+        <provider
+            android:name="com.wurao.ui.HitProvider"
+            android:authorities="com.wurao.app.hits"
+            android:exported="true"
+            android:enabled="true" />
+
             <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="无扰：去广告" />
         <meta-data android:name="xposedminversion" android:value="93" />

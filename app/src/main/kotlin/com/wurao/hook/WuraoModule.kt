@@ -11,6 +11,8 @@ import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import com.wurao.core.analyze.RectMatch
 import com.wurao.core.model.Act
+import com.wurao.core.model.Domain
+import com.wurao.inapp.Report
 import com.wurao.core.selector.SelectorMatcher
 import com.wurao.core.selector.SelectorParser
 import com.wurao.inapp.Actor
@@ -34,6 +36,7 @@ class WuraoModule : XposedModule() {
     private val containerMissLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val blockedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val clickedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val reportedHits = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var everResumed = false
     private var backgrounded = false
 
@@ -106,6 +109,21 @@ class WuraoModule : XposedModule() {
         Log.i("Wurao", "hooked $pkg")
     }
 
+    /** 命中回传：同一目标每进程只报一次，避免每帧 insert 耗电。 */
+    private fun reportHit(pkg: String, target: String, act: Act) {
+        if (!reportedHits.add("$pkg:$act:$target")) return
+        runCatching {
+            Report.hitRaw(
+                pkg = pkg,
+                key = target,   // hook 侧只有 target；界面按 id 或 target 反查规则
+                note = if (act == Act.CLICK) "自动点按" else "藏起来",
+                act = act,
+                domain = Domain.NODE,
+                target = target,
+            )
+        }
+    }
+
     // ==================== 自动点按 ====================
 
     /** 读本应用的 CLICK 规则，行格式 b64("act\ttarget")。开屏才调，无需缓存节流。 */
@@ -129,14 +147,18 @@ class WuraoModule : XposedModule() {
             val sel = runCatching { SelectorParser(target).parse() }.getOrNull() ?: continue
             val hit = runCatching { matcher.match(sel, root) }.getOrNull() ?: continue
             val act = Act.fromKey(actKey) ?: continue
-            if (Actor.perform(act, hit) && clickedLogged.add("$pkg:$target"))
-                Log.i("Wurao", "clicked $target in $pkg")
+            if (Actor.perform(act, hit)) {
+                if (clickedLogged.add("$pkg:$target")) Log.i("Wurao", "clicked $target in $pkg")
+                reportHit(pkg, target, act)
+            }
         }
     }
 
     // ==================== 控件隐藏 ====================
 
     private fun hideMatched(vg: ViewGroup, pkg: String) {
+        // 命中回传通道需要 Context；拿不到也不影响去广告本身
+        runCatching { Report.attach(vg.context.applicationContext) }
         val rules = loadHideRules(pkg)
         if (rules.isEmpty()) return
         currentPkg = pkg
@@ -181,8 +203,10 @@ class WuraoModule : XposedModule() {
                     v.layoutParams?.let { lp ->
                         runCatching { lp.width = 0; lp.height = 0; v.layoutParams = lp }
                     }
-                    if (hiddenTargets.add("$currentPkg:$target"))
+                    if (hiddenTargets.add("$currentPkg:$target")) {
                         Log.i("Wurao", "hid $target in $currentPkg")
+                        reportHit(currentPkg, target, Act.HIDE)
+                    }
                 }
                 return true
             }
@@ -266,8 +290,10 @@ class WuraoModule : XposedModule() {
                 runCatching { lp.width = 0; lp.height = 0; v.layoutParams = lp }
             }
         }
-        if (hiddenTargets.add("$currentPkg:$target"))
+        if (hiddenTargets.add("$currentPkg:$target")) {
             Log.i("Wurao", "hid $target in $currentPkg (rect)")
+            reportHit(currentPkg, target, Act.HIDE)
+        }
     }
 
     private val attrRegex = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]")

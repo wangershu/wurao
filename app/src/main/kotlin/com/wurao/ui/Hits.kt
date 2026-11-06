@@ -43,7 +43,9 @@ fun HitsScreen() {
         } else {
             items(rows, key = { it.pkg + "|" + it.ruleId }) { r ->
                 // 停用状态以规则库为准（与应用详情页同一个口径）
-                val off = RuleStore.all().firstOrNull { it.id == r.ruleId }?.enabled == false
+                // hook 侧落位的文件里只有 target，历史/新记录用 target 反查规则
+                val rule = RuleStore.all().firstOrNull { it.id == r.ruleId || it.target == r.ruleId }
+                val off = rule?.enabled == false
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.padding(14.dp),
@@ -52,8 +54,14 @@ fun HitsScreen() {
                         Column(Modifier.weight(1f)) {
                             Text(r.describe(), fontSize = 15.sp, color = MiuixTheme.colorScheme.onSurface)
                             Text(
-                                r.pkg + " · " + r.target,
+                                appLabelOf(ctx, r.pkg) + " · " + r.target,
                                 fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                            Text(
+                                r.pkg,
+                                fontSize = 11.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 modifier = Modifier.padding(top = 2.dp),
                             )
@@ -69,7 +77,7 @@ fun HitsScreen() {
                             checked = !off,
                             onCheckedChange = {
                                 // 映射到规则库：与应用详情页同一个状态源
-                                RuleStore.setEnabled(r.ruleId, off)
+                                rule?.let { RuleStore.setEnabled(it.id, off) }
                                 Ui.pushRulesAsync(ctx)
                                 Ui.hitRev++
                                 Ui.ruleRev++

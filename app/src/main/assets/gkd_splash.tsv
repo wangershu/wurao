@@ -1,0 +1,98 @@
+*	click	[text*="跳过"][text.length<10][visibleToUser=true]	开屏广告
+*	click	[childCount=0][visibleToUser=true][(text.length<10&&(text*="跳过"||text*="跳過"||text*="skip"||text*="Skip")) || id$="tt_splash_skip_btn" || vid*="skip" || vid*="Skip" || (vid*="count" && vid*="down" && vid!*="download") || desc*="跳过" || desc*="skip"]	开屏广告
+info.muge.appshare	click	[text*="跳过"][text.length<=10]	开屏广告
+info.muge.appshare	click	[id$="tt_splash_skip_btn"] <<n [vid="rlAdView"]	开屏广告
+net.csdn.csdnplus	click	[text*="跳过"][text.length<=10]	开屏广告
+net.csdn.csdnplus	click	[id$="tt_splash_skip_btn"]	开屏广告
+make.more.r2d2.cellular_z	click	[text*="跳过"][text.length<=10]	全局规则-1
+make.more.r2d2.cellular_z	click	[childCount=0][visibleToUser=true][(text.length<10&&(text*="跳过"||text*="跳過"||text*="skip"||text*="Skip")) || id$="tt_splash_skip_btn" || vid*="skip" || vid*="Skip" || (vid*="count" && vid*="down" && vid!*="download") || desc*="跳过" || desc*="skip"]	全局规则-2
+com.ksf.yyx	click	[id="com.ksf.yyx:id/ksad_splash_circle_skip_view"]	开屏广告
+com.ksf.yyx	click	[id="com.ksf.yyx:id/ksad_splash_root_container"] [childCount=3] > @ImageView[clickable=true] - [text="|"]	开屏广告
+com.cyl.musiccy.ou	click	[text*="跳过"][text.length<=10]	开屏广告
+com.cyl.musiccy.ou	click	[id="com.cyl.musiccy.ou:id/ksad_splash_root_container"] [childCount=3] > @ImageView[clickable=true] - [text="|"]	开屏广告
+com.picacomic.fregata	click	[id="com.picacomic.fregata:id/imageButton_popup_close"]	开屏广告
+cn.soulapp.android	click	[id="cn.soulapp.android:id/c_ad_skip_view_btn"]	开屏广告
+com.taptap	click	[text*="跳过"][text.length<10][visibleToUser=true]	开屏广告
+com.dubox.drive	click	[id="inmobi-ad"]	开屏广告
+dxwt.questionnaire.ui	click	[desc^="关闭"][desc.length<=10][visibleToUser=true]	开屏广告
+com.mfcloudcalculate.networkdisk	click	[id="com.mfcloudcalculate.networkdisk:id/frame_ad_splash_container"] >n [text^="跳过"][text.length<=4]	开屏广告
+com.mfcloudcalculate.networkdisk	click	[id$="tt_splash_skip_btn"] <<n [id="com.mfcloudcalculate.networkdisk:id/frame_ad_splash_container"]	开屏广告
+com.dfsly.bbs	click	[id="android:id/content"] >7 FrameLayout[childCount=7] > LinearLayout >3 ImageView[text=null][visibleToUser=true]	开屏广告
+com.chunqiu.ah	click	[text^="跳过"][text.length<10]	开屏广告
+gov.pianzong.androidnga	click	[id="gov.pianzong.androidnga:id/iv_tg_ad"]	开屏广告
+gov.pianzong.androidnga	click	[id="gov.pianzong.androidnga:id/ksad_splash_circle_skip_view"]	开屏广告
+gov.pianzong.androidnga	click	[id="gov.pianzong.androidnga:id/ksad_skip_view_skip"]	开屏广告
+com.UCMobile	click	[id="com.byted.pangle:id/tt_splash_skip_btn"]	开屏广告
+com.midea.vm.washer	click	[text*="跳过"][text.length<=10]	开屏广告
+com.qiyi.video.lite	click	[text*="关闭"] <2 LinearLayout	开屏广告
+com.hanweb.android.sdzwfw.activity	click	[text*="关闭"][text.length<=10]	开屏广告
+com.shanghaionstar	click	[id="com.shanghaionstar:id/jump_view"]	开屏广告
+com.baidu.tieba	click	[id="com.byted.pangle:id/tt_splash_skip_btn"]	【圆圈跳过】型-来自穿山甲SDK
+com.byfen.market	click	[id="com.byted.pangle:id/tt_splash_skip_btn"]	开屏广告
+com.byfen.market	click	[id="com.byfen.market:id/ad_view"] >3 View[clickable=true]	开屏广告
+tv.danmaku.bili	click	[id="tv.danmaku.bili:id/count_down"][text^="跳"]	开屏广告
+tv.danmaku.bilibilihd	click	[id="tv.danmaku.bilibilihd:id/count_down"]	开屏广告
+com.kuangxiangciweimao.novel	click	[id="com.kuangxiangciweimao.novel:id/mTasksView"]	开屏广告
+cn.damai	click	[id="cn.damai:id/homepage_advert_pb"]	开屏广告
+com.citiccard.mobilebank	click	[id="com.citiccard.mobilebank:id/btn_skip"]	开屏广告
+com.citiccard.mobilebank	click	[id="com.citiccard.mobilebank:id/jump"]	开屏广告
+com.dongqiudi.news	click	[id="com.byted.pangle:id/tt_splash_skip_btn"||text^="跳过"&&id=null]	开屏广告
+com.dongqiudi.news	click	[id="com.dongqiudi.news:id/ad_skip_time"] + [id="com.dongqiudi.news:id/scale_iv"]	另一种倒计时广告
+com.diershoubing.erbing	click	[text="跳过"]	开屏广告
+com.fbank.mobile	click	[id="com.fbank.mobile:id/iv_dumiao"]	开屏广告
+com.x.istar	click	[text="关闭广告"][vid="btn_negative"]	全屏广告-开屏广告弹窗
+com.huawei.browser	click	[id$="/hiad_skip_text"]	开屏广告
+com.huawei.android.totemweather	click	[id="com.huawei.android.totemweather:id/rl_splash_container"]	开屏广告
+com.huawei.music	click	[id="com.huawei.hms.ads.uiengine:id/hiad_skip_text"]	开屏广告
+com.android.mediacenter	click	[text^="跳过"][text.length<=10]	开屏广告
+com.huawei.health	click	[id$="hiad_skip_text"]	开屏广告
+com.huawei.android.thememanager	click	[text^="跳过"][text.length<=10]	开屏广告
+com.handsgo.jiakao.android	click	[id=`com.handsgo.jiakao.android:id/closeLayout`]	开屏广告
+com.yek.android.kfc.activitys	click	[id=`com.yek.android.kfc.activitys:id/splash_tv_3`]	开屏广告
+com.kkeji.news.client	click	[id="com.kkeji.news.client:id/tv_counter"]	开屏广告
+com.coolapk.market	click	[id$="tt_splash_skip_btn"] <<n [id="com.coolapk.market:id/ad_container"]	开屏广告
+com.coolapk.market	click	[text^="跳过"][text.length<=4]	开屏广告
+com.kugou.android	click	[desc="跳过"||desc="GdtCountDownView"]	开屏广告
+com.hxak.liangongbao	click	[id=`com.hxak.liangongbao:id/time_down`]	开屏广告
+com.manmanbuy.bijia	click	[text^="关闭"][text.length=4]	开屏广告
+com.mostone.life	click	[id="android:id/content"] >n FrameLayout[childCount=4] > View	开屏广告
+com.qiekj.user	click	[id="com.qiekj.user:id/native_splash_view"] >n [text^="跳过"]	开屏广告
+com.qiekj.user	click	[id="com.kwad.dy.sdk:id/ksad_splash_root_container"] >n [text="跳过"]	开屏广告
+com.qiekj.user	click	[id="com.kwad.dy.sdk:id/ksad_splash_root_container"] >n ViewGroup > TextView + TextView + ImageView[clickable=true]	开屏广告
+com.gentle.ppcat	click	[text="放弃奖励离开"]	开屏广告
+com.gentle.ppcat	click	[desc="关闭喵"]	开屏广告
+com.tencent.tmgp.kgame.ppcr	click	[id="com.tencent.ysdkcore:id/com_tencent_ysdk_icon_h5_xx"]	开屏广告
+com.example.pptv	click	[text*="跳过"][text.length<=10]	开屏广告
+com.example.pptv	click	[id="com.example.pptv:id/view_count_shake"]	开屏广告
+com.intsig.camscanner	click	[id=`com.intsig.camscanner:id/tv_drop_cnl_close_new`]	开屏vip提示
+com.flyersoft.seekbooks	click	[id="com.flyersoft.seekbooks:id/splash_container1"] >5 [text^="跳过"][text.length<=3]	开屏广告
+com.mymoney	click	[text*="跳过"][text.length<=10]	开屏广告
+com.taobao.taobao	click	[id="com.taobao.taobao:id/close"]	开屏广告
+com.taobao.litetao	click	[id="com.taobao.litetao:id/root_layout"] > TextView[text^="还剩"&&text$="秒"]	开屏广告
+com.qq.qcloud	click	[id="com.qq.qcloud:id/gdt_ad_text"] + ImageView	开屏广告
+com.qq.qcloud	click	[text^="互动广告"] + @LinearLayout[clickable=true] > ImageView	开屏广告
+com.wacai365	click	[text^="跳过"][text.length<=6]	开屏广告
+com.waimaiii.waimaiii	click	[text*="跳过"][text.length<=10]	【跳过+倒计时】型
+com.waimaiii.waimaiii	click	[id="com.byted.pangle:id/tt_splash_skip_btn"]	【圆圈跳过】型-穿山甲SDK
+com.waimaiii.waimaiii	click	[id="com.waimaiii.waimaiii:id/flContainer"] >n FrameLayout[childCount=3] > FrameLayout + @View[clickable=true] + TextView	开屏广告
+com.waimaiii.waimaiii	click	[id="android:id/content"] >9 FrameLayout + View[clickable=true]	开屏广告
+cn.lezhi.speedtest	click	[text*="跳过"][text.length<=10]	腾讯SDK
+com.netease.mobimail	click	[text*="跳过"][text.length<=10][id!="com.netease.mobimail:id/ad_skip"]	开屏广告
+com.netease.mobimail	click	[id="com.byted.pangle:id/tt_splash_skip_btn"]	开屏广告
+com.netease.mobimail	click	[id="com.netease.mobimail:id/ad_skip"][clickable=true]	开屏广告
+com.netease.mail	click	[text*="跳过"][text.length<=10]	开屏广告
+com.netease.mail	click	[id$="tt_splash_skip_btn"]	开屏广告
+com.example.maintenancemaster	click	[id="com.example.maintenancemaster:id/advertisement_countdown_ccd"]	开屏广告
+com.realtech.xiaocan	click	[text^="跳过"][text.length<=10]	开屏广告
+com.xiaoenai.app	click	[text*="跳过"][text.length<=10]	开屏广告
+com.xiaote	click	[id="com.xiaote:id/ad_close"][text*="关闭"]	开屏广告
+moc.nauxuoyoaixoaix.www	click	[id$="tt_splash_skip_btn"] <<n [vid="adsFl"]	开屏广告
+moc.nauxuoyoaixoaix.www	click	[vid="adsFl"]	开屏广告
+com.firebear.androil	click	[text*="跳过"][text.length<=10]	开屏广告
+me.zhouzhuo810.zznote	click	[id="me.zhouzhuo810.zznote:id/native_ad_container"] + [id^="me.zhouzhuo810.zznote:id/btn_next"]	开屏广告
+com.ky.medical.reference	click	[id="com.ky.medical.reference:id/btn_go"][text^="关闭"]	开屏广告
+com.cmstop.shaoxing	click	[id="com.cmstop.shaoxing:id/roundProgressBar"]	开屏广告
+com.wwwscn.yuexingbao	click	[id$="tt_splash_skip_btn"]	开屏广告
+pansong291.xposed.quickenergy.repair	click	[id='android:id/button2']	开屏弹窗跳过
+com.crirp.zhipu	click	[text="关闭"]	开屏广告
+cn.mil.junhao	click	[vid="splash_adv_ship"]	开屏广告

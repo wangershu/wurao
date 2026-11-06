@@ -115,6 +115,10 @@ class MainActivity : ComponentActivity() {
         // 会把"半成品"写回去覆盖完整配置，实测静默丢了 6700 条规则。
         // 2.8 万条实测不卡（ANR 记录新增 0），为它冒竞态的险不值。
         Ui.restoreRules(this)
+        // 首次启动（或订阅被清空后）自动装入 GKD 官方开屏规则；幂等，不会重复
+        if (!com.wurao.core.SplashRules.alreadyImported()) {
+            Ui.runInBackground(this) { com.wurao.core.SplashRules.import(this@MainActivity) }
+        }
         // 清掉早期调试规则（会隐藏所有 TextView），老用户升级后自动清一次
         val debugRules = com.wurao.core.store.RuleStore.all().filter {
             it.target.contains("[name=\"TextView\"]")
