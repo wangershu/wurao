@@ -79,7 +79,17 @@ object RuleStore {
             }
             // 对每个勾选应用都落位（没规则的写空，用来清掉旧规则）；
             // 拿不到 scope（未绑定框架）时按有规则的应用全落
-            val pkgs = if (scope.isEmpty()) hides.map { pkgOf(it) }.distinct() else scope.toList()
+            val scopePkgs = if (scope.isEmpty()) hides.map { pkgOf(it) }.distinct() else scope.toList()
+            // 点按规则按 App 专属落位：即使该 App 暂时没勾 LSPosed 作用域也先把文件备好，
+            // 用户一勾选就立即生效；否则 96 条 App 专属开屏规则一条都进不了目标进程
+            val clickPkgs = rules.values
+                .filter { r ->
+                    r.enabled && (r.act == com.wurao.core.model.Act.CLICK ||
+                        r.act == com.wurao.core.model.Act.LONG_CLICK)
+                }
+                .mapNotNull { pkgOf(it).takeIf(String::isNotBlank) }
+                .distinct()
+            val pkgs = (scopePkgs + clickPkgs).distinct()
             val byPkg = pkgs.filter { it.isNotBlank() }.associateWith { pkg ->
                 hides.filter { pkgOf(it) == pkg }.map { it.target }
             }
