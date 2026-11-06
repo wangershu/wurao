@@ -109,10 +109,7 @@ class WuraoModule : XposedModule() {
         for (target in rules) {
             if (matchesTarget(target, v)) {
                 if (v.visibility != View.GONE) {
-                    v.visibility = View.GONE
-                    v.layoutParams?.let { lp ->
-                        runCatching { lp.width = 0; lp.height = 0; v.layoutParams = lp }
-                    }
+                    hideWholeTapTarget(v)
                     if (hiddenTargets.add("$currentPkg:$target"))
                         Log.i("Wurao", "hid $target in $currentPkg")
                 }
@@ -120,6 +117,34 @@ class WuraoModule : XposedModule() {
             }
         }
         return false
+    }
+
+    /**
+     * 只把命中的叶子 GONE 掉不够：底栏 tab 的图标/文字没了，但可点击的
+     * tab 容器还在，看着消失却仍然点得到。这里向上找最近的可点击祖先一起隐藏。
+     *
+     * 面积守卫：祖先不能超过命中 View 的 2 倍，否则就是整条底栏 / 整块页面，
+     * 绝不能动（懂车帝 TabWidget 实测约 5 倍）。
+     */
+    private fun hideWholeTapTarget(v: View) {
+        var target = v
+        val base = (v.width.toLong() * v.height).coerceAtLeast(1)
+        var p = v.parent
+        while (p is View) {
+            val area = p.width.toLong() * p.height
+            if (area > base * 2L) break
+            if (p.isClickable || p.isLongClickable) {
+                target = p
+                break
+            }
+            p = p.parent
+        }
+        target.visibility = View.GONE
+        target.isClickable = false
+        target.isEnabled = false
+        target.layoutParams?.let { lp ->
+            runCatching { lp.width = 0; lp.height = 0; target.layoutParams = lp }
+        }
     }
 
     private val attrRegex = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]")
