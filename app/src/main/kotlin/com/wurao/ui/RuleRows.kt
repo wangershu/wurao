@@ -42,6 +42,18 @@ fun ruleScopePkg(r: Rule): String = when (val s = r.scope) {
     Scope.Global -> ""
 }
 
+private val genericViewNames = setOf(
+    "View", "ViewGroup", "FrameLayout", "LinearLayout", "RelativeLayout",
+    "ConstraintLayout", "ComposeView", "AndroidComposeView", "SurfaceView",
+    "TextureView", "DecorView", "CoordinatorLayout",
+)
+
+/** 纯通用容器类名规则：会命中满屏同类 View，实际无法定位，需要重抓。 */
+fun isGenericNameSelector(target: String): Boolean {
+    val m = Regex("\\[name=\"([^\"]+)\"\\]").matchEntire(target.trim()) ?: return false
+    return m.groupValues[1].substringAfterLast('.') in genericViewNames
+}
+
 /** 包名转应用名，拿不到就退回包名。 */
 fun appLabelOf(ctx: Context, pkg: String): String =
     runCatching {
@@ -63,8 +75,14 @@ fun RuleRow(
     val ctx = LocalContext.current
     val pkg = ruleScopePkg(r)
     var showMenu by remember { mutableStateOf(false) }
-    val titleColor = if (r.enabled) MiuixTheme.colorScheme.onSurface
+    val stale = isGenericNameSelector(r.target)
+    val titleColor = if (r.enabled && !stale) MiuixTheme.colorScheme.onSurface
     else MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val stateText = when {
+        stale -> " · 无法定位，请重抓"
+        r.enabled -> " · 已启用"
+        else -> " · 已停用"
+    }
 
     Box {
         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -87,7 +105,7 @@ fun RuleRow(
                     val where = if (pkg.isBlank()) "所有应用" else appLabelOf(ctx, pkg)
                     Text(
                         "$where · ${actCn(r.act)} · ${domainCn(r.domain.key)}" +
-                            if (r.enabled) " · 已启用" else " · 已停用",
+                            stateText,
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         modifier = Modifier.padding(top = 3.dp),

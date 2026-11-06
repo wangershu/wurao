@@ -99,6 +99,11 @@ class SnapshotService : AccessibilityService() {
             FrameOverlay.show(this, shot) { pick, act ->
                 val rules = RuleGen.rules(pick.pkg ?: "", pick.node, pick.container, act = act)
                 val store = com.wurao.core.store.RuleStore
+                // 重抓时清掉同应用里旧的纯通用容器名规则（它们无法定位）
+                com.wurao.core.store.RuleStore.all().filter {
+                    com.wurao.ui.ruleScopePkg(it) == (pick.pkg ?: "") &&
+                        com.wurao.ui.isGenericNameSelector(it.target)
+                }.forEach { com.wurao.core.store.RuleStore.remove(it.id) }
                 rules.forEach { store.upsert(it) }
                 android.util.Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} 共 ${rules.size} 条 target=${rules.firstOrNull()?.target}")
                 com.wurao.ui.Ui.pushRulesAsync(this)

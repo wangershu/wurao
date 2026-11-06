@@ -89,6 +89,11 @@ class FloatService : Service() {
                             if (picks.isNotEmpty()) FrameOverlay.show(svc, picks) { pick, act ->
                                 val rules = com.wurao.core.analyze.RuleGen
                                     .rules(pick.pkg ?: "", pick.node, pick.container, act)
+                                // 重抓时清掉同应用里旧的纯通用容器名规则（它们无法定位）
+                                com.wurao.core.store.RuleStore.all().filter {
+                                    com.wurao.ui.ruleScopePkg(it) == (pick.pkg ?: "") &&
+                                        com.wurao.ui.isGenericNameSelector(it.target)
+                                }.forEach { com.wurao.core.store.RuleStore.remove(it.id) }
                                 rules.forEach { com.wurao.core.store.RuleStore.upsert(it) }
                                 Log.i("Wurao", "抓屏保存 pkg=${pick.pkg} act=${act.key} 共 ${rules.size} 条 target=${rules.firstOrNull()?.target}")
                                 // 写回 prefs（重启不丢）+ 推配置；规则落位由 RuleStore.persist 负责
