@@ -246,7 +246,13 @@ fun AppDetailScreen(pkg: String) {
     // 这个应用的规则：自抓的逐条可管，订阅的只报条数（几万条不铺开）
     val appRules = run { Ui.ruleRev; RuleStore.all().filter { ruleScopePkg(it) == pkg } }
     val myRules = appRules.filter { it.origin is Origin.User }
-    val subCount = appRules.size - myRules.size
+    // 开屏点按规则（订阅来源）逐条列出可管；其它订阅规则量太大，仍只报条数
+    val splashRules = appRules.filter {
+        it.origin !is Origin.User &&
+            (it.act == com.wurao.core.model.Act.CLICK || it.act == com.wurao.core.model.Act.LONG_CLICK)
+    }
+    val listed = myRules + splashRules
+    val subCount = appRules.size - listed.size
     var editNote by remember { mutableStateOf<Rule?>(null) }
     var noteDraft by remember { mutableStateOf("") }
     var confirmDel by remember { mutableStateOf<Rule?>(null) }
@@ -266,12 +272,17 @@ fun AppDetailScreen(pkg: String) {
         }
 
         // ---------- 这个应用的规则（删除/编辑会重新落位到 hook） ----------
-        item { Kit.Section("这个应用的规则", "${myRules.size} 条自抓 · 订阅 $subCount 条") }
-        item { Kit.Note("开关控制规则是否生效；长按某条规则可以改备注或删除。") }
-        if (myRules.isEmpty()) {
-            item { Kit.Empty("这个应用还没有自己抓的规则。切过去点悬浮球抓一屏，选中的控件会存到这里。") }
+        item {
+            Kit.Section(
+                "这个应用的规则",
+                "${myRules.size} 条自抓 · 开屏 ${splashRules.size} 条 · 其它订阅 $subCount 条",
+            )
+        }
+        item { Kit.Note("开关控制规则是否生效；长按某条规则可以改备注或删除。点按规则在开屏时执行。") }
+        if (listed.isEmpty()) {
+            item { Kit.Empty("这个应用还没有规则。切过去点悬浮球抓一屏，选中的控件会存到这里。") }
         } else {
-            items(myRules, key = { "rule:" + it.id }) { r ->
+            items(listed, key = { "rule:" + it.id }) { r ->
                 RuleRow(
                     r = r,
                     onEditNote = { editNote = r; noteDraft = r.note },

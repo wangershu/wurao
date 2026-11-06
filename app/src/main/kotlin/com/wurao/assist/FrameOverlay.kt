@@ -154,6 +154,8 @@ object FrameOverlay {
         ctx: Context,
         private val picks: List<SnapshotService.Pick>,
         private val onPick: (SnapshotService.Pick, Act) -> Unit,
+        /** 面板上切换的动作，默认藏起来；点一下会生成 CLICK 规则并落位。 */
+        private var pickedAct: Act = Act.HIDE
     ) : View(ctx) {
 
         var panelContent: LinearLayout? = null
@@ -249,9 +251,10 @@ object FrameOverlay {
             val content = panelContent ?: return
             content.removeAllViews()
             val ctx = content.context
-            val (act, why, actEnum) = suggestFor(p)
+            val (_, why, _) = suggestFor(p)
+            val actName = if (pickedAct == Act.HIDE) "藏起来" else "点一下"
             content.addView(TextView(ctx).apply {
-                text = "建议：$act —— $why"
+                text = "动作：$actName —— $why"
                 setTextColor(Color.WHITE)
                 textSize = 14f
                 setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 6))
@@ -271,11 +274,14 @@ object FrameOverlay {
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
             if (levelIndex > 0) btnRow.addView(chip(ctx, "− 细") { moveLevel(-1) })
             if (levelIndex < levelPicks.lastIndex) btnRow.addView(chip(ctx, "+ 粗") { moveLevel(1) })
-            btnRow.addView(chip(ctx, "按建议做", primary = true) {
-                onPick(p, actEnum)
-                val svc = com.wurao.assist.SnapshotService.instance
-                // 藏起来：只存规则，不画遮盖（遮盖会一直遮住、切换 App 还在，不对）。
-                // 真正的隐藏由引擎下次进入时做（view.visibility = GONE）。
+            btnRow.addView(chip(ctx, actName) {
+                pickedAct = if (pickedAct == Act.HIDE) Act.CLICK else Act.HIDE
+                showSuggest(p)   // 重绘面板，动作名和保存按钮同步
+            })
+            btnRow.addView(chip(ctx, "保存", primary = true) {
+                onPick(p, pickedAct)
+                // 只存规则，不画遮盖（遮盖会一直遮住、切换 App 还在，不对）。
+                // 隐藏/点按都由引擎在开屏触发时执行。
                 FrameOverlay.hide(ctx)
             })
             btnRow.addView(chip(ctx, "取消") {
