@@ -213,10 +213,11 @@ object FrameOverlay {
         }
 
         private fun suggestFor(p: SnapshotService.Pick): Triple<String, String, Act> {
-            val txt = p.node.text ?: p.node.desc ?: ""
-            val skipLike = txt.contains("跳过") || txt.contains("关闭") || txt.contains("Skip", true) || txt.contains("跳过广告")
-            return if (skipLike) Triple("点掉", "文案里写着『$txt』，像是要你点的那种", Act.CLICK)
-            else Triple("藏起来", "不像要点的，更像要藏掉的东西（${txt.ifBlank { p.node.vid ?: p.node.className.substringAfterLast('.') }}）", Act.HIDE)
+            // 抓屏只生成「藏起来」；自动点按统一由订阅规则 + 开屏触发来做
+            val what = p.node.vid ?: p.node.text?.takeIf { it.isNotBlank() }
+                ?: p.node.desc?.takeIf { it.isNotBlank() }
+                ?: p.node.className.substringAfterLast('.')
+            return Triple("藏起来", "藏掉「$what」", Act.HIDE)
         }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -273,19 +274,6 @@ object FrameOverlay {
             btnRow.addView(chip(ctx, "按建议做", primary = true) {
                 onPick(p, actEnum)
                 val svc = com.wurao.assist.SnapshotService.instance
-                if (actEnum == Act.CLICK) {
-                    // 点掉：立即点一下（dispatchGesture）
-                    svc?.let {
-                        val cx = p.bounds.centerX().toFloat()
-                        val cy = p.bounds.centerY().toFloat()
-                        val path = android.graphics.Path().apply { moveTo(cx, cy); lineTo(cx, cy) }
-                        it.dispatchGesture(
-                            android.accessibilityservice.GestureDescription.Builder()
-                                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 50))
-                                .build(), null, null,
-                        )
-                    }
-                }
                 // 藏起来：只存规则，不画遮盖（遮盖会一直遮住、切换 App 还在，不对）。
                 // 真正的隐藏由引擎下次进入时做（view.visibility = GONE）。
                 FrameOverlay.hide(ctx)

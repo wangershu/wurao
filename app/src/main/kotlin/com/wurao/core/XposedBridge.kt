@@ -74,7 +74,11 @@ object XposedBridge {
         }
     }
 
-    fun land(byPkg: Map<String, List<String>>, domains: List<String>) {
+    fun land(
+        byPkg: Map<String, List<String>>,
+        domains: List<String>,
+        clickByPkg: Map<String, List<String>> = emptyMap(),
+    ) {
         val s = svc ?: run {
             val now = android.os.SystemClock.elapsedRealtime()
             if (now - lastSkipLogMs > 5000) {
@@ -91,15 +95,29 @@ object XposedBridge {
                 if (lastWritten[key] == content) return@forEach
                 if (writeRemote(s, key, content)) { lastWritten[key] = content; changed++ }
             }
+            // 自动点按规则：按应用单独落位，行格式 b64("act\ttarget")
+            clickByPkg.forEach { (pkg, targets) ->
+                val key = "wurao_click_$pkg"
+                val content = targets.joinToString("\n") { b64(it) }
+                if (lastWritten[key] == content) return@forEach
+                if (writeRemote(s, key, content)) { lastWritten[key] = content; changed++ }
+            }
             val domContent = domains.joinToString("\n")
-            if (domContent.isNotBlank() && lastWritten["wurao_domains"] != domContent) {
+            if (domContent.isBlank()) {
+                // 全部被排除时也要把框架的域名表清掉，否则还在拦
+                if (lastWritten.containsKey("wurao_domains")) clearDomains()
+            } else if (lastWritten["wurao_domains"] != domContent) {
                 if (writeRemote(s, "wurao_domains", domContent)) {
                     lastWritten["wurao_domains"] = domContent
                     changed++
                 }
             }
             if (changed > 0)
-                Log.i("Wurao", "landed ${byPkg.size} apps, ${domains.size} domains (changed=$changed)")
+                Log.i(
+                    "Wurao",
+                    "landed ${byPkg.size} apps, ${domains.size} domains, " +
+                        "${clickByPkg.values.sumOf { it.size }} clicks (changed=$changed)",
+                )
         }.onFailure { Log.w("Wurao", "land failed: ${it.javaClass.simpleName} ${it.message}") }
     }
 

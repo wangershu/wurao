@@ -91,9 +91,31 @@ object RuleStore {
             runCatching {
                 val f = java.io.File("/data/data/com.wurao.app/files/adclose.txt")
                 if (f.exists()) domains += f.readLines()
+                    .filter { it.isNotBlank() && !it.trim().startsWith("#") && !it.trim().startsWith("!") }
+                    .map { com.wurao.core.DomainExclusions.normalize(it) }
+                    .filter { it.isNotBlank() }
             }
-            android.util.Log.i("Wurao", "doLand: ${byPkg.values.sumOf { it.size }} 条 HIDE / ${byPkg.size} 个应用 / ${domains.size} 域名")
-            com.wurao.core.XposedBridge.land(byPkg, domains.distinct())
+            // 用户单独移除的域名（误屏蔽后恢复用），落位前减掉
+            val excluded = com.wurao.core.DomainExclusions.load()
+            val liveDomains = domains.distinct().filter { it !in excluded }
+
+            // 自动点按：订阅的 CLICK 规则 + 内置两条开屏跳过，一起落位到目标 App。
+            // 全局规则（开屏跳过）对每个作用域应用都写一份。
+            val clickRules = rules.values.filter { r ->
+                r.enabled && (r.act == com.wurao.core.model.Act.CLICK ||
+                    r.act == com.wurao.core.model.Act.LONG_CLICK)
+            } + com.wurao.core.Builtin.rules()
+            val clickByPkg = pkgs.filter { it.isNotBlank() }.associateWith { pkg ->
+                clickRules.filter { pkgOf(it).isBlank() || pkgOf(it) == pkg }
+                    .map { it.act.key + "\t" + it.target }
+            }
+
+            android.util.Log.i(
+                "Wurao",
+                "doLand: ${byPkg.values.sumOf { it.size }} 条 HIDE / " +
+                    "${clickByPkg.values.sumOf { it.size }} 条 CLICK / ${byPkg.size} 个应用 / ${liveDomains.size} 域名",
+            )
+            com.wurao.core.XposedBridge.land(byPkg, liveDomains, clickByPkg)
         }
     }
 

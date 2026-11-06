@@ -1,12 +1,20 @@
 package com.wurao.hook
 
+import android.app.Activity
 import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import com.wurao.core.analyze.RectMatch
+import com.wurao.core.model.Act
+import com.wurao.core.selector.SelectorMatcher
+import com.wurao.core.selector.SelectorParser
+import com.wurao.inapp.Actor
+import com.wurao.inapp.ViewAdapter
 import java.net.InetAddress
 
 /**
@@ -25,6 +33,9 @@ class WuraoModule : XposedModule() {
     private val hiddenTargets = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val containerMissLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val blockedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val clickedLogged = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private var everResumed = false
+    private var backgrounded = false
 
     @Volatile private var lastRectMs = 0L
     private val rectHits = java.util.concurrent.ConcurrentHashMap<String, View>()
@@ -67,7 +78,60 @@ class WuraoModule : XposedModule() {
                 }
         }.onFailure { Log.w("Wurao", "dns hook failed: ${it.javaClass.simpleName}") }
 
+        // ---- 自动点按：只在冷启动 / 从后台切回时跑 ----
+        // onStop 标记「离开了」，onResume 时只有首次或离开过才触发；
+        // 应用内页面切换不会 onStop，所以不会每页都点。
+        runCatching {
+            hook(Activity::class.java.getDeclaredMethod("onStop"))
+                .intercept { chain ->
+                    backgrounded = true
+                    chain.proceed()
+                }
+            hook(Activity::class.java.getDeclaredMethod("onResume"))
+                .intercept { chain ->
+                    val a = chain.thisObject as? Activity
+                    val fire = !everResumed || backgrounded
+                    if (fire) { everResumed = true; backgrounded = false }
+                    val ret = chain.proceed()
+                    if (fire && a != null) {
+                        val h = Handler(Looper.getMainLooper())
+                        // 两次延迟覆盖异步填充的开屏广告
+                        h.postDelayed({ runClicks(a, pkg) }, 300)
+                        h.postDelayed({ runClicks(a, pkg) }, 1200)
+                    }
+                    ret
+                }
+        }.onFailure { Log.w("Wurao", "activity hook failed: ${it.javaClass.simpleName}") }
+
         Log.i("Wurao", "hooked $pkg")
+    }
+
+    // ==================== 自动点按 ====================
+
+    /** 读本应用的 CLICK 规则，行格式 b64("act\ttarget")。开屏才调，无需缓存节流。 */
+    private fun loadClickRules(pkg: String): List<Pair<String, String>> = runCatching {
+        readRemote("wurao_click_$pkg").lines().filter { it.isNotBlank() }.mapNotNull { line ->
+            runCatching {
+                val raw = String(java.util.Base64.getDecoder().decode(line), Charsets.UTF_8)
+                val i = raw.indexOf('\t')
+                if (i > 0) raw.substring(0, i) to raw.substring(i + 1) else "click" to raw
+            }.getOrNull()
+        }
+    }.getOrElse { emptyList() }
+
+    private fun runClicks(a: Activity, pkg: String) {
+        val rules = loadClickRules(pkg)
+        if (rules.isEmpty()) return
+        val root = runCatching { a.window?.decorView }.getOrNull() ?: return
+        if (rules.isNotEmpty()) Log.i("Wurao", "click rules loaded: ${rules.size} for $pkg")
+        val matcher = SelectorMatcher(ViewAdapter(pkg))
+        for ((actKey, target) in rules) {
+            val sel = runCatching { SelectorParser(target).parse() }.getOrNull() ?: continue
+            val hit = runCatching { matcher.match(sel, root) }.getOrNull() ?: continue
+            val act = Act.fromKey(actKey) ?: continue
+            if (Actor.perform(act, hit) && clickedLogged.add("$pkg:$target"))
+                Log.i("Wurao", "clicked $target in $pkg")
+        }
     }
 
     // ==================== 控件隐藏 ====================
@@ -314,10 +378,12 @@ class WuraoModule : XposedModule() {
         return set
     }
 
-    /** 兼容 AdGuard(`||x^`)、hosts(`0.0.0.0 x`)、纯域名三种格式。 */
+    /** 兼容 AdClose(`domain, x`)、AdGuard(`||x^`)、hosts(`0.0.0.0 x`)、纯域名。 */
     private fun cleanDomain(line: String): String? {
         var d = line.trim().lowercase()
         if (d.isEmpty() || d.startsWith("#") || d.startsWith("!")) return null
+        // AdClose 域名表格式：domain, xxx.com（旧落位文件里可能还带着前缀）
+        if (d.startsWith("domain,")) d = d.removePrefix("domain,").trim()
         if (d.startsWith("||")) d = d.removePrefix("||")
         if (d.startsWith("0.0.0.0 ") || d.startsWith("127.0.0.1 ") || d.startsWith("::1 "))
             d = d.substringAfter(' ').trim()
