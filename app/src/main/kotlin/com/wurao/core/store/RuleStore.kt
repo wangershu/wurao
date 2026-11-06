@@ -119,8 +119,12 @@ object RuleStore {
                         r.act == com.wurao.core.model.Act.LONG_CLICK)
                 } + com.wurao.core.Builtin.rules()
             ).distinctBy { it.act.key + "|" + it.target + "|" + pkgOf(it) }
+            // 全局规则只落一份 wurao_click_global，不再重复写进每个 App 的文件；
+            // 「全局」页和 App 详情页一样，各自对应自己的一份规则
+            val clickGlobal = clickRules.filter { pkgOf(it).isBlank() }
+                .map { it.act.key + "\t" + it.target }
             val clickByPkg = pkgs.filter { it.isNotBlank() }.associateWith { pkg ->
-                clickRules.filter { pkgOf(it).isBlank() || pkgOf(it) == pkg }
+                clickRules.filter { pkgOf(it) == pkg }
                     .map { it.act.key + "\t" + it.target }
             }
 
@@ -129,7 +133,12 @@ object RuleStore {
                 "doLand: ${byPkg.values.sumOf { it.size }} 条 HIDE / " +
                     "${clickByPkg.values.sumOf { it.size }} 条 CLICK / ${byPkg.size} 个应用 / ${liveDomains.size} 域名",
             )
-            com.wurao.core.XposedBridge.land(byPkg, liveDomains, clickByPkg)
+            val clickExclusions = runCatching {
+                java.io.File("/data/data/com.wurao.app/files/gkd_exclusions.txt")
+                    .takeIf { it.exists() }?.readLines()
+                    ?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            }.getOrDefault(emptyList())
+            com.wurao.core.XposedBridge.land(byPkg, liveDomains, clickByPkg, clickGlobal, clickExclusions)
         }
     }
 

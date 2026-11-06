@@ -46,6 +46,7 @@ fun HitsScreen() {
                 // hook 侧落位的文件里只有 target，历史/新记录用 target 反查规则
                 val rule = RuleStore.all().firstOrNull { it.id == r.ruleId || it.target == r.ruleId }
                 val off = rule?.enabled == false
+                val isGlobal = rule?.scope is com.wurao.core.model.Scope.Global
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.padding(14.dp),
@@ -77,16 +78,42 @@ fun HitsScreen() {
                             )
                         }
                         Spacer(Modifier.width(10.dp))
-                        Switch(
-                            checked = !off,
-                            onCheckedChange = {
-                                // 映射到规则库：与应用详情页同一个状态源
-                                rule?.let { RuleStore.setEnabled(it.id, off) }
-                                Ui.pushRulesAsync(ctx)
-                                Ui.hitRev++
-                                Ui.ruleRev++
-                            },
-                        )
+                        if (isGlobal) {
+                            // 全局规则不在这里给开关：在 A 里关掉会影响所有应用，
+                            // 统一指到「全局」页去改
+                            Card(modifier = Modifier.width(140.dp).padding(vertical = 4.dp)) {
+                                Column(Modifier.padding(8.dp)) {
+                                    Text(
+                                        "全局规则",
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        "去「全局」里开关",
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                    Text(
+                                        "停用会影响其他应用",
+                                        fontSize = 10.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
+                            }
+                        } else {
+                            Switch(
+                                checked = !off,
+                                onCheckedChange = {
+                                    // 映射到规则库：与应用详情页同一个状态源
+                                    rule?.let { RuleStore.setEnabled(it.id, off) }
+                                    Ui.pushRulesAsync(ctx)
+                                    Ui.hitRev++
+                                    Ui.ruleRev++
+                                },
+                            )
+                        }
                     }
                 }
             }

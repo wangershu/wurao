@@ -23,10 +23,19 @@ object SplashRules {
         (it.origin as? Origin.Subscription)?.subsId == SUBS_ID
     }
 
+    /** 把 GKD 的全局规则例外名单落到内部文件，doLand 会读它。 */
+    fun ensureExclusions(ctx: Context) {
+        runCatching {
+            val text = ctx.assets.open("gkd_exclusions.txt").bufferedReader().use { it.readText() }
+            java.io.File(ctx.filesDir, "gkd_exclusions.txt").writeText(text)
+        }
+    }
+
     fun import(ctx: Context): String {
         val text = runCatching {
             ctx.assets.open(ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return "读不到内置开屏规则"
+        ensureExclusions(ctx)
         val origin = Origin.Subscription(SUBS_ID)
         var n = 0
         RuleStore.beginBatch()

@@ -183,6 +183,27 @@ fun AppsScreen() {
             .filter { filter != AppsFilter.SCOPE || it.first in scope }
             .sortedByDescending { hitCount[it.first] ?: 0 }
 
+        val globalCount = run {
+            Ui.ruleRev
+            RuleStore.all().count { it.scope is com.wurao.core.model.Scope.Global }
+        }
+        if (filter == AppsFilter.ALL) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    pressFeedbackType = PressFeedbackType.Tilt,
+                    onClick = { Navigator.go(Dest.GlobalRules) },
+                ) {
+                    Kit.PlainRow(
+                        title = "全局",
+                        summary = "对所有应用生效的规则 · $globalCount 条（停用会影响其他应用）",
+                        onClick = { Navigator.go(Dest.GlobalRules) },
+                    )
+                }
+            }
+        }
+
         items(appsSorted, key = { it.first }) { (pkg, label) ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -298,36 +319,6 @@ fun AppDetailScreen(pkg: String) {
                         Ui.ruleRev++
                     },
                 )
-            }
-        }
-
-        // ---------- 全局开屏规则（网易云这类不在专属名单里的 App 靠它生效） ----------
-        val globalClicks = run {
-            Ui.ruleRev
-            RuleStore.all().filter {
-                it.scope is com.wurao.core.model.Scope.Global &&
-                    (it.act == com.wurao.core.model.Act.CLICK ||
-                        it.act == com.wurao.core.model.Act.LONG_CLICK)
-            }
-        }
-        if (globalClicks.isNotEmpty()) {
-            item { Kit.Section("全局开屏规则", "${globalClicks.size} 条 · 对所有应用生效") }
-            item { Kit.Note("不在专属名单里的应用靠这几条通用「跳过」规则点按。停用会影响所有应用。") }
-            item {
-                Kit.RowGroup {
-                    globalClicks.forEach { r ->
-                        Kit.SwitchRow(
-                            title = "点掉 · " + r.note.ifBlank { r.target },
-                            summary = r.target,
-                            checked = r.enabled,
-                            onChecked = {
-                                RuleStore.setEnabled(r.id, it)
-                                Ui.pushRulesAsync(ctx)
-                                Ui.ruleRev++
-                            },
-                        )
-                    }
-                }
             }
         }
 

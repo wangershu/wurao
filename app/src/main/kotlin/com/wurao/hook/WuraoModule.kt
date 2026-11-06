@@ -143,15 +143,25 @@ class WuraoModule : XposedModule() {
     }
 
     /** 读本应用的 CLICK 规则，行格式 b64("act\ttarget")。开屏才调，无需缓存节流。 */
-    private fun loadClickRules(pkg: String): List<Pair<String, String>> = runCatching {
-        readRemote("wurao_click_$pkg").lines().filter { it.isNotBlank() }.mapNotNull { line ->
+    private fun loadClickRules(pkg: String): List<Pair<String, String>> {
+        val exclusions = runCatching {
+            readRemote("wurao_click_exclusions").lines().map { it.trim() }.toSet()
+        }.getOrDefault(emptySet())
+        val lines = buildList {
+            if (pkg !in exclusions) {
+                addAll(runCatching { readRemote("wurao_click_global").lines() }.getOrDefault(emptyList()))
+            }
+            // App 专属规则不受例外名单影响
+            addAll(runCatching { readRemote("wurao_click_$pkg").lines() }.getOrDefault(emptyList()))
+        }
+        return lines.filter { it.isNotBlank() }.mapNotNull { line ->
             runCatching {
                 val raw = String(java.util.Base64.getDecoder().decode(line), Charsets.UTF_8)
                 val i = raw.indexOf('\t')
                 if (i > 0) raw.substring(0, i) to raw.substring(i + 1) else "click" to raw
             }.getOrNull()
         }
-    }.getOrElse { emptyList() }
+    }
 
     private fun runClicks(a: Activity, pkg: String) {
         val rules = loadClickRules(pkg)

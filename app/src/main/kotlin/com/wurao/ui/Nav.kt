@@ -22,6 +22,8 @@ sealed interface Dest {
     // ---- 应用 ----
     /** 应用详情：风险级开关 + 该应用的规则 */
     data class AppDetail(val pkg: String) : Dest
+    /** 全局规则：对所有应用生效的规则，单一入口管理 */
+    data object GlobalRules : Dest
     /** 自动分析子页面：扫组件挖广告候选 */
     data class AppAnalysis(val pkg: String) : Dest
 

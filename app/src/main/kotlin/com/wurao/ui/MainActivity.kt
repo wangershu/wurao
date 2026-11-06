@@ -115,6 +115,8 @@ class MainActivity : ComponentActivity() {
         // 会把"半成品"写回去覆盖完整配置，实测静默丢了 6700 条规则。
         // 2.8 万条实测不卡（ANR 记录新增 0），为它冒竞态的险不值。
         Ui.restoreRules(this)
+        // 例外名单是内置资产，每次启动都确保落到内部文件（规则库已有数据时不会重导）
+        com.wurao.core.SplashRules.ensureExclusions(this)
         // 首次启动（或订阅被清空后）自动装入 GKD 官方开屏规则；幂等，不会重复
         if (!com.wurao.core.SplashRules.alreadyImported()) {
             Ui.runInBackground(this) { com.wurao.core.SplashRules.import(this@MainActivity) }
@@ -475,6 +477,7 @@ class MainActivity : ComponentActivity() {
                             when (val d = Navigator.current) {
                                 is Dest.AppDetail -> AppDetailScreen(d.pkg)
                                 is Dest.AppAnalysis -> AppAnalysisScreen(d.pkg)
+                                Dest.GlobalRules -> GlobalRulesScreen()
                                 Dest.Hits -> HitsScreen()
                                 Dest.Sources -> SourcesScreen()
                                 Dest.DomainList -> DomainListScreen()

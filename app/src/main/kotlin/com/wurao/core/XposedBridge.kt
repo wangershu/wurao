@@ -94,6 +94,8 @@ object XposedBridge {
         byPkg: Map<String, List<String>>,
         domains: List<String>,
         clickByPkg: Map<String, List<String>> = emptyMap(),
+        clickGlobal: List<String> = emptyList(),
+        clickExclusions: List<String> = emptyList(),
     ) {
         val s = svc ?: run {
             val now = android.os.SystemClock.elapsedRealtime()
@@ -110,6 +112,18 @@ object XposedBridge {
                 val content = targets.joinToString("\n") { b64(it) }
                 if (lastWritten[key] == content) return@forEach
                 if (writeRemote(s, key, content)) { lastWritten[key] = content; changed++ }
+            }
+            // GKD 例外名单：这些 App 不跑全局点按规则（专属规则不受影响）
+            val eKey = "wurao_click_exclusions"
+            val eContent = clickExclusions.joinToString("\n")
+            if (lastWritten[eKey] != eContent) {
+                if (writeRemote(s, eKey, eContent)) { lastWritten[eKey] = eContent; changed++ }
+            }
+            // 全局点按规则：只写一份，所有应用共用
+            val gKey = "wurao_click_global"
+            val gContent = clickGlobal.joinToString("\n") { b64(it) }
+            if (lastWritten[gKey] != gContent) {
+                if (writeRemote(s, gKey, gContent)) { lastWritten[gKey] = gContent; changed++ }
             }
             // 自动点按规则：按应用单独落位，行格式 b64("act\ttarget")
             clickByPkg.forEach { (pkg, targets) ->
