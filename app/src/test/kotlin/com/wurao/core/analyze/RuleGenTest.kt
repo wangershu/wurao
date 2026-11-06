@@ -127,4 +127,23 @@ class RuleGenTest {
         val node = RuleGen.NodeInfo(className = "android.view.View", vid = "tab_video", desc = "视频")
         assertEquals("[vid=\"tab_video\"]", RuleGen.candidates(node, null).first())
     }
+
+    // ---------------- 自绘界面：没有 text/desc/vid 时按位置定位 ----------------
+
+    @Test
+    fun 无标识节点有位置时优先生成rect选择器() {
+        val node = RuleGen.NodeInfo(
+            className = "android.widget.FrameLayout",
+            rect = "10,20,110,220",
+        )
+        val sels = RuleGen.candidates(node, null)
+        assertEquals("[rect=\"10,20,110,220\"]", sels.first())
+        assertTrue("类名只作兜底：${sels.last()}", sels.last().contains("[name="))
+    }
+
+    @Test
+    fun 无标识且无位置时仍退回类名() {
+        val node = RuleGen.NodeInfo(className = "android.widget.TextView")
+        assertEquals("[name=\"android.widget.TextView\"]", RuleGen.candidates(node, null).first())
+    }
 }

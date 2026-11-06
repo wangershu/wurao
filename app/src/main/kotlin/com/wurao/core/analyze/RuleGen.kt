@@ -27,6 +27,8 @@ object RuleGen {
         /** 资源短名（GKD 的 vid），没有 id 时为 null。 */
         val vid: String? = null,
         val clickable: Boolean = false,
+        /** 屏幕区域 "l,t,r,b"：自绘界面没有 text/desc/vid 时靠位置定位。 */
+        val rect: String? = null,
     )
 
     /**
@@ -51,6 +53,9 @@ object RuleGen {
         // 类名兜底**只在没有任何更好特征时才用**：底栏里往往有好几个同类型的 View，
         // 按类名选会选错（实测过），所以有文案/id 就绝不加这一级。
         if (selfSelectors.isEmpty()) {
+            // 自绘 App（如摩托范）的节点只有 className，纯类名会命中满屏同类 View。
+            // 有屏幕区域时优先按位置锁定，类名只留作兜底。
+            node.rect?.takeIf { it.isNotBlank() }?.let { selfSelectors += "[rect=\"$it\"]" }
             selfSelectors += "[name=\"${node.className}\"]"
         }
 

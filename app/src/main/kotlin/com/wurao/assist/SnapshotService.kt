@@ -148,13 +148,18 @@ class SnapshotService : AccessibilityService() {
         }
     }
 
-    private fun infoOf(n: AccessibilityNodeInfo) = RuleGen.NodeInfo(
-        className = n.className?.toString() ?: "",
-        text = n.text?.toString(),
-        desc = n.contentDescription?.toString(),
-        vid = n.viewIdResourceName?.substringAfterLast('/'),
-        clickable = n.isClickable,
-    )
+    private fun infoOf(n: AccessibilityNodeInfo): RuleGen.NodeInfo {
+        val r = android.graphics.Rect()
+        runCatching { n.getBoundsInScreen(r) }
+        return RuleGen.NodeInfo(
+            className = n.className?.toString() ?: "",
+            text = n.text?.toString(),
+            desc = n.contentDescription?.toString(),
+            vid = n.viewIdResourceName?.substringAfterLast('/'),
+            clickable = n.isClickable,
+            rect = "${r.left},${r.top},${r.right},${r.bottom}",
+        )
+    }
 
     /** 前台服务 + 常驻通知：防系统回收（测试期间）。 */
     private fun startKeepaliveNotification() {

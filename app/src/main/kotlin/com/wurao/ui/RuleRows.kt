@@ -2,11 +2,14 @@ package com.wurao.ui
 
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,9 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.wurao.core.model.Rule
 import com.wurao.core.model.Scope
 import top.yukonga.miuix.kmp.basic.Card
@@ -60,78 +66,85 @@ fun RuleRow(
     val titleColor = if (r.enabled) MiuixTheme.colorScheme.onSurface
     else MiuixTheme.colorScheme.onSurfaceVariantSummary
 
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = { showMenu = true },
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    r.note.ifBlank { r.target },
-                    fontSize = 14.sp,
-                    color = titleColor,
-                )
-                val where = if (pkg.isBlank()) "所有应用" else appLabelOf(ctx, pkg)
-                Text(
-                    "$where · ${actCn(r.act)} · ${domainCn(r.domain.key)}" +
-                        if (r.enabled) " · 已启用" else " · 已停用",
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-                Text(
-                    r.target,
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-            }
-            Switch(
-                checked = r.enabled,
-                onCheckedChange = { onToggle() },
-            )
-        }
-    }
-
-    if (showMenu) {
-        Dialog(onDismissRequest = { showMenu = false }) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+    Box {
+        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { showMenu = true },
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text(
                         r.note.ifBlank { r.target },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onSurface,
+                        fontSize = 14.sp,
+                        color = titleColor,
+                    )
+                    val where = if (pkg.isBlank()) "所有应用" else appLabelOf(ctx, pkg)
+                    Text(
+                        "$where · ${actCn(r.act)} · ${domainCn(r.domain.key)}" +
+                            if (r.enabled) " · 已启用" else " · 已停用",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 3.dp),
                     )
                     Text(
-                        "长按菜单 · 开关控制是否生效",
+                        r.target,
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.padding(top = 3.dp),
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(text = "改备注", onClick = {
+                }
+                Switch(
+                    checked = r.enabled,
+                    onCheckedChange = { onToggle() },
+                )
+            }
+        }
+
+        // 锚定在行右上角的菜单，不再是全屏对话框
+        if (showMenu) {
+            Popup(
+                alignment = Alignment.TopEnd,
+                offset = IntOffset(-24, 96),
+                onDismissRequest = { showMenu = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Card(modifier = Modifier.width(168.dp)) {
+                    Column {
+                        MenuItem("改备注") {
                             showMenu = false
                             onEditNote()
-                        })
-                        TextButton(text = "删除", onClick = {
+                        }
+                        MenuItem("删除这条规则", danger = true) {
                             showMenu = false
                             onDelete()
-                        })
+                        }
                     }
                 }
             }
         }
     }
+
+}
+
+
+@Composable
+private fun MenuItem(text: String, danger: Boolean = false, onClick: () -> Unit) {
+    Text(
+        text,
+        fontSize = 14.sp,
+        color = if (danger) MiuixTheme.colorScheme.error
+        else MiuixTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 13.dp),
+    )
 }
 
 /** 改备注弹框（长按菜单里的「改备注」用）。 */

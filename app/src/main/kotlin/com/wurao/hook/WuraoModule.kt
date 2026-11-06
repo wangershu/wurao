@@ -123,6 +123,12 @@ class WuraoModule : XposedModule() {
     }
 
     private val attrRegex = Regex("\\[(text|desc|vid|name)\\*?=\"([^\"]+)\"\\]")
+    private val rectRegex = Regex("\\[rect=\"([^\"]+)\"\\]")
+    private val genericViews = setOf(
+        "View", "ViewGroup", "FrameLayout", "LinearLayout", "RelativeLayout",
+        "ConstraintLayout", "ComposeView", "AndroidComposeView", "SurfaceView",
+        "TextureView", "DecorView", "CoordinatorLayout",
+    )
 
     /**
      * 关系选择器 `A << B` 的含义是「在 A 的后代里找 B」：
@@ -135,8 +141,14 @@ class WuraoModule : XposedModule() {
         val selfPart = target.substringAfterLast("<<").trim()
         val containerPart = target.takeIf { it.contains("<<") }
             ?.substringBeforeLast("<<")?.trim()
+        // 位置选择器：自绘界面唯一能定位的方式，优先于属性匹配
+        rectRegex.find(selfPart)?.groupValues?.get(1)?.let { return rectHits(it, v) }
         val attrs = attrRegex.findAll(selfPart).toList()
         if (attrs.isEmpty()) return false
+        // 纯通用容器类名会命中满屏同类 View，旧规则直接跳过（避免误伤整片界面）
+        if (attrs.size == 1 && attrs[0].groupValues[1] == "name" &&
+            attrs[0].groupValues[2].substringAfterLast('.') in genericViews
+        ) return false
         if (!attrHits(attrs, v)) return false
         // 容器约束：祖先链里必须找得到 A；拿不到 parent（某些自绘界面）时放宽
         if (!containerPart.isNullOrBlank()) {
@@ -159,6 +171,22 @@ class WuraoModule : XposedModule() {
         return true
     }
 
+    /** 按抓屏时的屏幕区域匹配：中心点落在框内，且尺寸不能比框大太多（防命中父容器）。 */
+    private fun rectHits(raw: String, v: View): Boolean {
+        val p = raw.split(",").mapNotNull { it.toIntOrNull() }
+        if (p.size != 4) return false
+        val loc = IntArray(2)
+        runCatching { v.getLocationOnScreen(loc) }
+        val vl = loc[0]; val vt = loc[1]
+        val vr = vl + v.width; val vb = vt + v.height
+        val tw = p[2] - p[0]; val th = p[3] - p[1]
+        if (tw <= 0 || th <= 0 || vr <= vl || vb <= vt) return false
+        val cx = (vl + vr) / 2; val cy = (vt + vb) / 2
+        val inside = cx >= p[0] - 8 && cx <= p[2] + 8 && cy >= p[1] - 8 && cy <= p[3] + 8
+        val fit = (vr - vl) <= tw * 1.5f && (vb - vt) <= th * 1.5f
+        return inside && fit
+    }
+
     private fun attrHits(attrs: List<MatchResult>, v: View): Boolean {
         val txt = when (v) {
             is android.widget.TextView -> v.text?.toString() ?: ""
@@ -175,7 +203,7 @@ class WuraoModule : XposedModule() {
                 "text" -> txt.isNotEmpty() && (txt == value || txt.contains(value))
                 "desc" -> desc.isNotEmpty() && (desc == value || desc.contains(value))
                 "vid" -> vid.isNotEmpty() && vid == value
-                "name" -> cls == value
+                "name" -> cls == value || v.javaClass.name == value
                 else -> false
             }
             if (hit) return true
