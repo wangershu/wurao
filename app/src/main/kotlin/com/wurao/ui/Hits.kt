@@ -52,9 +52,13 @@ fun HitsScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(r.describe(), fontSize = 15.sp, color = MiuixTheme.colorScheme.onSurface)
                             Text(
-                                appLabelOf(ctx, r.pkg) + " · " + r.target,
+                                appLabelOf(ctx, r.pkg) + " · " + r.describe(),
+                                fontSize = 15.sp,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                r.target,
                                 fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 modifier = Modifier.padding(top = 2.dp),
