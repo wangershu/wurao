@@ -148,10 +148,11 @@ class RuleGenTest {
     }
 
     @Test
-    fun 自身无标识但容器有资源id时借容器id() {
+    fun 自身无标识时绝不借父容器id_否则会隐藏整条底栏() {
         val node = RuleGen.NodeInfo(className = "android.widget.RelativeLayout", rect = "45,903,1155,1643")
-        val container = RuleGen.NodeInfo(className = "android.widget.FrameLayout", vid = "ad_container")
+        val container = RuleGen.NodeInfo(className = "android.widget.FrameLayout", vid = "h93")
         val sels = RuleGen.candidates(node, container)
-        assertEquals("[vid=\"ad_container\"]", sels.first())
+        assertTrue("不能用父容器 id：${sels.first()}", !sels.first().contains("h93"))
+        assertEquals("[rect=\"45,903,1155,1643\"]", sels.first())
     }
 }
