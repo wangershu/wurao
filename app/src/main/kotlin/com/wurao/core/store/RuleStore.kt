@@ -101,10 +101,14 @@ object RuleStore {
 
             // 自动点按：订阅的 CLICK 规则 + 内置两条开屏跳过，一起落位到目标 App。
             // 全局规则（开屏跳过）对每个作用域应用都写一份。
-            val clickRules = rules.values.filter { r ->
-                r.enabled && (r.act == com.wurao.core.model.Act.CLICK ||
-                    r.act == com.wurao.core.model.Act.LONG_CLICK)
-            } + com.wurao.core.Builtin.rules()
+            // 整体去重：内置全局开屏组与 Builtin 的「跳过」规则完全相同，
+            // 不去重会连点两次、命中记录也会出现两行
+            val clickRules = (
+                rules.values.filter { r ->
+                    r.enabled && (r.act == com.wurao.core.model.Act.CLICK ||
+                        r.act == com.wurao.core.model.Act.LONG_CLICK)
+                } + com.wurao.core.Builtin.rules()
+            ).distinctBy { it.act.key + "|" + it.target + "|" + pkgOf(it) }
             val clickByPkg = pkgs.filter { it.isNotBlank() }.associateWith { pkg ->
                 clickRules.filter { pkgOf(it).isBlank() || pkgOf(it) == pkg }
                     .map { it.act.key + "\t" + it.target }

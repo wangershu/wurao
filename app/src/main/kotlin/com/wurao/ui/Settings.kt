@@ -58,6 +58,15 @@ fun SettingsScreen() {
         mutableStateOf(Ui.prefs(ctx).getString(Cfg.KEY_PAUSED, null) == "true")
     }
     var confirmPause by remember { mutableStateOf(false) }
+    var toastOn by remember {
+        mutableStateOf(Ui.prefs(ctx).getString(Cfg.KEY_CLICK_TOAST, "true") != "false")
+    }
+    var toastText by remember {
+        mutableStateOf(
+            Ui.prefs(ctx).getString(Cfg.KEY_CLICK_TOAST_TEXT, Cfg.DEFAULT_CLICK_TOAST_TEXT)
+                ?: Cfg.DEFAULT_CLICK_TOAST_TEXT
+        )
+    }
 
     Kit.Page(title = "设置") {
         item {
@@ -103,6 +112,41 @@ fun SettingsScreen() {
                 icon = MiuixIcons.Theme,
                 onClick = { Navigator.go(Dest.Appearance) },
             )
+        }
+        item { Kit.Section("跳过提醒") }
+        item {
+            Kit.Group {
+                Kit.SwitchRow(
+                    title = "自动点按后提示",
+                    summary = if (toastOn) "点按成功弹一下提示，文字可改" else "已关闭提醒",
+                    icon = MiuixIcons.Tune,
+                    checked = toastOn,
+                    onChecked = { on ->
+                        toastOn = on
+                        Ui.prefs(ctx).edit().putString(Cfg.KEY_CLICK_TOAST, on.toString()).apply()
+                        Ui.pushRulesAsync(ctx)
+                    },
+                )
+                if (toastOn) {
+                    TextField(
+                        value = toastText,
+                        onValueChange = { toastText = it },
+                        label = "提示文字（默认「已跳过」）",
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(text = "保存文字", onClick = {
+                            val t = toastText.trim().ifBlank { Cfg.DEFAULT_CLICK_TOAST_TEXT }
+                            toastText = t
+                            Ui.prefs(ctx).edit().putString(Cfg.KEY_CLICK_TOAST_TEXT, t).apply()
+                            Ui.pushRulesAsync(ctx)
+                        })
+                    }
+                }
+            }
         }
         item {
             Kit.ArrowItem(

@@ -133,7 +133,7 @@ fun HomeScreen() {
                         )
                         Text(
                             if (!frameOk) "请确认模块已在 LSPosed 中启用并勾选作用域，然后重新打开应用"
-                            else "抓屏和自动化用不了。去开：设置 › 无障碍 › 已下载的服务 › 无扰",
+                            else "抓屏用不了。去开：设置 › 无障碍 › 已下载的服务 › 无扰",
                             fontSize = 14.sp, color = WARN_FG,
                         )
                     }

@@ -16,6 +16,10 @@ import com.wurao.core.model.Scope
 object Cfg {
 
     const val GROUP = "wurao_cfg"
+    /** 自动点按成功后的 Toast：开关 + 可编辑文字（默认「已跳过」）。 */
+    const val KEY_CLICK_TOAST = "click_toast_enabled"
+    const val KEY_CLICK_TOAST_TEXT = "click_toast_text"
+    const val DEFAULT_CLICK_TOAST_TEXT = "已跳过"
 
     /**
      * 送进 hook 进程的那个远程文件名。

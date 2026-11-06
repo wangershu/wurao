@@ -126,6 +126,22 @@ class WuraoModule : XposedModule() {
 
     // ==================== 自动点按 ====================
 
+    /** 点按成功后按配置弹 Toast；配置来自界面推送的 cfg.json，读失败就按默认。 */
+    private fun showClickToast(a: Activity) {
+        val cfg = runCatching {
+            org.json.JSONObject(readRemote(com.wurao.core.Cfg.CFG_FILE))
+        }.getOrNull() ?: return
+        if (cfg.optString(com.wurao.core.Cfg.KEY_CLICK_TOAST, "true") == "false") return
+        val text = cfg.optString(
+            com.wurao.core.Cfg.KEY_CLICK_TOAST_TEXT,
+            com.wurao.core.Cfg.DEFAULT_CLICK_TOAST_TEXT,
+        ).ifBlank { com.wurao.core.Cfg.DEFAULT_CLICK_TOAST_TEXT }
+        Log.i("Wurao", "click toast: $text")
+        runCatching {
+            android.widget.Toast.makeText(a, text, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     /** 读本应用的 CLICK 规则，行格式 b64("act\ttarget")。开屏才调，无需缓存节流。 */
     private fun loadClickRules(pkg: String): List<Pair<String, String>> = runCatching {
         readRemote("wurao_click_$pkg").lines().filter { it.isNotBlank() }.mapNotNull { line ->
@@ -150,6 +166,9 @@ class WuraoModule : XposedModule() {
             if (Actor.perform(act, hit)) {
                 if (clickedLogged.add("$pkg:$target")) Log.i("Wurao", "clicked $target in $pkg")
                 reportHit(pkg, target, act)
+                showClickToast(a)
+                // 一次开屏只点一次：兜底规则与精确规则会命中同一个「跳过」按钮
+                break
             }
         }
     }
