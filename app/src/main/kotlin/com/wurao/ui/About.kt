@@ -165,26 +165,12 @@ fun AboutScreen() {
                     Spacer(Modifier.height(heroHeight + DEVELOPER_TOP_GAP))
                     Kit.Section("开发者")
                     Kit.RowGroup {
-                        Kit.ArrowRow(
+                        Kit.PlainRow(
                             title = DEVELOPER_NAME,
-                            summary = DEVELOPER_HANDLE,
+                            summary = "自用模块，本地维护",
                             icon = MiuixIcons.Community,
-                            onClick = { openUrl(ctx, DEVELOPER_URL) }
                         )
                     }
-                }
-            }
-
-            item { Kit.Section("交流") }
-            item {
-                Kit.RowGroup {
-                    Kit.PlainRow(
-                        title = "问题反馈",
-                        summary = "规则失效、闪退，去 issues 提",
-                        icon = MiuixIcons.Messages,
-                        onClick = { openUrl(ctx, ISSUES) },
-                        end = { ExternalIcon() }
-                    )
                 }
             }
 
@@ -193,57 +179,25 @@ fun AboutScreen() {
                 Kit.RowGroup {
                     Kit.PlainRow(
                         title = "检查更新",
-                        summary = updateHint.ifBlank { "点一下去 GitHub 查最新版" },
+                        summary = updateHint.ifBlank {
+                            "当前 ${BuildConfig.VERSION_NAME} · 本地构建，无在线更新"
+                        },
                         icon = MiuixIcons.Update,
                         enabled = !checking,
                         onClick = {
-                            if (checking) return@PlainRow
-                            scope.launch {
-                                checking = true
-                                val msg = withContext(Dispatchers.IO) { probeLatest() }
-                                updateHint = msg
-                                checking = false
-                                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
-                            }
+                            val msg = "当前 ${BuildConfig.VERSION_NAME}（本地构建，无在线更新）"
+                            updateHint = msg
+                            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
                         },
-                        end = {
-                            if (checking) {
-                                Box(
-                                    modifier = Modifier.padding(end = 8.dp).size(26.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(size = 20.dp)
-                                }
-                            }
-                        }
-                    )
-                    Kit.PlainRow(
-                        title = "发布页",
-                        summary = "下载最新 APK",
-                        icon = MiuixIcons.Info,
-                        onClick = { openUrl(ctx, RELEASES) },
-                        end = { ExternalIcon() }
                     )
                 }
             }
 
             item { Kit.Section("项目") }
             item {
-                Kit.RowGroup {
-                    Kit.PlainRow(
-                        title = "仓库",
-                        summary = REPO,
-                        icon = MiuixIcons.Link,
-                        onClick = { openUrl(ctx, REPO) },
-                        end = { ExternalIcon() }
-                    )
-                    Kit.PlainRow(
-                        title = "更新日志",
-                        summary = CHANGES,
-                        icon = MiuixIcons.Info,
-                        onClick = { openUrl(ctx, CHANGES) },
-                        end = { ExternalIcon() }
-                    )
+                Kit.Group {
+                    Kit.KeyValue("版本", BuildConfig.VERSION_NAME)
+                    Kit.KeyValue("分发", "自用构建，不提供在线仓库 / 发布页")
                 }
             }
 
@@ -510,7 +464,7 @@ private fun probeLatest(): String {
         conn.readTimeout = 8_000
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         val code = conn.responseCode
-        if (code !in 200..299) return "暂时查不到更新信息（仓库可能是私有的）"
+        if (code !in 200..299) return "暂时查不到更新信息"
         val body = conn.inputStream.bufferedReader().readText()
         val tag = JSONObject(body).optString("tag_name", "").trim().removePrefix("v")
         if (tag.isBlank()) return "暂时查不到更新信息"

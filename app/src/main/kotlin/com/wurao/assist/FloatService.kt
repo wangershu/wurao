@@ -22,6 +22,12 @@ import android.widget.TextView
  */
 class FloatService : Service() {
 
+    companion object {
+        /** 悬浮球是否真的挂在窗口上（服务活着但权限被关时仍是 false）。 */
+        @Volatile var active = false
+            private set
+    }
+
     private var wm: WindowManager? = null
     private var ball: View? = null
 
@@ -115,13 +121,18 @@ class FloatService : Service() {
         runCatching {
             wm?.addView(v, lp)
             ball = v
+            active = true
             Log.i("Wurao", "悬浮球已显示")
-        }.onFailure { Log.w("Wurao", "悬浮球没挂上（没悬浮窗权限？）", it) }
+        }.onFailure {
+            active = false
+            Log.w("Wurao", "悬浮球没挂上（没悬浮窗权限？）", it)
+        }
     }
 
     override fun onDestroy() {
         ball?.let { runCatching { wm?.removeView(it) } }
         ball = null
+        active = false
         super.onDestroy()
     }
 }

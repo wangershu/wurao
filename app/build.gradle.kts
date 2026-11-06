@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// 发布版本号 0.3.1.<当前提交 7 位短哈希>：构建时从 git 读，避免自引用
+val gitShortHash: String = runCatching {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short=7", "HEAD")
+        workingDir(rootDir)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().takeIf {
+        it.length >= 7 && it.all { c -> c in '0'..'9' || c in 'a'..'f' }
+    }?.take(7) ?: "dev"
+}.getOrDefault("dev")
+
 android {
     namespace = "com.wurao"
     // libxposed api 102 的依赖元数据要求 compileSdk >= 37
@@ -16,8 +27,8 @@ android {
         applicationId = "com.wurao.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.3.1.$gitShortHash"
     }
 
     compileOptions {
@@ -33,6 +44,14 @@ android {
                 // AGP 9 内置的 Kotlin 是 2.2.0，miuix 0.9.4 是 2.4.0 编译的 —— 跳过 metadata 版本检查
                 "-Xskip-metadata-version-check"
             )
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            // 自用模块：沿用 debug 签名，release 包可直接安装
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

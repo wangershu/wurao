@@ -360,6 +360,7 @@ class MainActivity : ComponentActivity() {
                 "hits" -> Navigator.jump(Dest.Hits, Navigator.Tab.HOME)
                 "sources" -> Navigator.jump(Dest.Sources, Navigator.Tab.SETTINGS)
                 "settings" -> Navigator.jump(Dest.Settings, Navigator.Tab.SETTINGS)
+                "about" -> Navigator.jump(Dest.About, Navigator.Tab.SETTINGS)
                 "domains" -> Navigator.jump(Dest.DomainList, Navigator.Tab.SETTINGS)
                 "backup" -> Navigator.jump(Dest.Backup, Navigator.Tab.SETTINGS)
                 "appearance" -> Navigator.jump(Dest.Appearance, Navigator.Tab.SETTINGS)

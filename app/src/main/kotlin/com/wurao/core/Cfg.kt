@@ -20,6 +20,8 @@ object Cfg {
     const val KEY_CLICK_TOAST = "click_toast_enabled"
     const val KEY_CLICK_TOAST_TEXT = "click_toast_text"
     const val DEFAULT_CLICK_TOAST_TEXT = "已跳过"
+    /** 忽略「无障碍没开」提示（LSP 未连接时不生效）。 */
+    const val KEY_IGNORE_A11Y = "ignore_a11y_hint"
 
     /**
      * 送进 hook 进程的那个远程文件名。

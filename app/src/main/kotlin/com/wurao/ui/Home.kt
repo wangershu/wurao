@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,11 +75,38 @@ fun HomeScreen() {
     // 之前会一直停在「未激活」。做成可观察状态，定时刷新到连上为止。
     var frameOk by remember { mutableStateOf(CfgPush.bound) }
     var a11yOn by remember { mutableStateOf(a11yEnabled(ctx)) }
+    var ignoredA11y by remember {
+        mutableStateOf(Ui.prefs(ctx).getBoolean(Cfg.KEY_IGNORE_A11Y, false))
+    }
+    var floatOn by remember {
+        mutableStateOf(Ui.prefs(ctx).getBoolean("float_ball", false))
+    }
+    fun setFloat(on: Boolean) {
+        floatOn = on
+        Ui.prefs(ctx).edit().putBoolean("float_ball", on).apply()
+        if (on) {
+            if (!Settings.canDrawOverlays(ctx)) {
+                ctx.startActivity(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
+                )
+            } else {
+                ctx.startService(Intent(ctx, FloatService::class.java))
+            }
+        } else {
+            ctx.stopService(Intent(ctx, FloatService::class.java))
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             delay(1500)
             frameOk = CfgPush.bound
             a11yOn = a11yEnabled(ctx)
+            // 悬浮球被系统回收 / 悬浮窗权限被关时，开关要跟实际状态同步
+            val ballAlive = FloatService.active && Settings.canDrawOverlays(ctx)
+            if (floatOn != ballAlive) {
+                floatOn = ballAlive
+                Ui.prefs(ctx).edit().putBoolean("float_ball", ballAlive).apply()
+            }
         }
     }
     val ver = runCatching {
@@ -117,7 +145,9 @@ fun HomeScreen() {
         }
 
         // ---------- 告警横幅 ----------
-        if (!frameOk || !a11yOn) {
+        // LSP 没连接必须一直提示，不允许忽略；只有「框架已连、只差无障碍」才能忽略
+        val showWarn = if (!frameOk) true else (!a11yOn && !ignoredA11y)
+        if (showWarn) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -136,6 +166,22 @@ fun HomeScreen() {
                             else "抓屏用不了。去开：设置 › 无障碍 › 已下载的服务 › 无扰",
                             fontSize = 14.sp, color = WARN_FG,
                         )
+                        if (frameOk && !a11yOn) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Text(
+                                    "忽略",
+                                    fontSize = 14.sp,
+                                    color = WARN_FG,
+                                    modifier = Modifier
+                                        .clickable {
+                                            ignoredA11y = true
+                                            Ui.prefs(ctx).edit()
+                                                .putBoolean(Cfg.KEY_IGNORE_A11Y, true).apply()
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -156,29 +202,6 @@ fun HomeScreen() {
         item { Kit.Section("常用") }
         item {
             Kit.RowGroup {
-                // 悬浮球：一个小胶囊贴在屏幕边缘，点一下就开启抓屏（画框点选生成规则）
-                var floatOn by remember {
-                    mutableStateOf(Ui.prefs(ctx).getBoolean("float_ball", false))
-                }
-                fun setFloat(on: Boolean) {
-                    floatOn = on
-                    Ui.prefs(ctx).edit().putBoolean("float_ball", on).apply()
-                    if (on) {
-                        // 悬浮窗权限：没有就去要
-                        if (!Settings.canDrawOverlays(ctx)) {
-                            ctx.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${ctx.packageName}"),
-                                )
-                            )
-                        } else {
-                            ctx.startService(Intent(ctx, FloatService::class.java))
-                        }
-                    } else {
-                        ctx.stopService(Intent(ctx, FloatService::class.java))
-                    }
-                }
                 Kit.SwitchRow(
                     title = "悬浮球抓规则",
                     summary = "贴在屏幕边缘的小胶囊，点一下开启抓屏：控件被橙框框出来，点哪个治哪个",
