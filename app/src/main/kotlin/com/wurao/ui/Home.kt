@@ -269,5 +269,8 @@ fun a11yEnabled(ctx: Context): Boolean {
     val services = Settings.Secure.getString(
         ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
     ) ?: ""
-    return services.contains(ctx.packageName)
+    // 系统开关记着 != 服务真的连上：被系统回收/崩溃时开关仍在，但抓屏没框。
+    // 两个条件都满足才算可用，否则黄色卡片不会提醒，用户会以为一切正常。
+    return services.contains(ctx.packageName) &&
+        com.wurao.assist.SnapshotService.active
 }
