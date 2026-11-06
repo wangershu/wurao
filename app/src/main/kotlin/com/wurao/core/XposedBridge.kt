@@ -74,6 +74,22 @@ object XposedBridge {
         }
     }
 
+    /** 把有规则的应用推荐进 LSPosed 作用域；框架可能弹确认，结果走回调。 */
+    fun requestScope(pkgs: List<String>, onResult: (Boolean, String) -> Unit) {
+        val s = svc ?: run { onResult(false, "框架未连接"); return }
+        runCatching {
+            s.requestScope(pkgs, object : XposedService.OnScopeEventListener {
+                override fun onScopeRequestApproved(list: List<String>) {
+                    onResult(true, "已勾选 ${list.size} 个应用")
+                }
+
+                override fun onScopeRequestFailed(reason: String) {
+                    onResult(false, reason)
+                }
+            })
+        }.onFailure { onResult(false, it.message ?: "请求失败") }
+    }
+
     fun land(
         byPkg: Map<String, List<String>>,
         domains: List<String>,

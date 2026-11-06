@@ -75,8 +75,15 @@ fun AppsScreen() {
         loaded = true
     }
 
-    // LSPosed 作用域（框架服务连着才拿得到）
-    val scope = remember { CfgPush.scope().toSet() }
+    // LSPosed 作用域：框架服务是异步绑定的，首帧拿不到 → 定时刷新，
+    // 否则「已在 LSPosed 勾选」会永远显示 0 个
+    var scope by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            scope = CfgPush.scope().toSet()
+            kotlinx.coroutines.delay(3000)
+        }
+    }
 
     Kit.Page(
         title = "应用",
@@ -127,6 +134,33 @@ fun AppsScreen() {
             }
         }
 
+        // ---------- 推荐勾选：有规则但没进 LSPosed 作用域的应用 ----------
+        val recommended = run {
+            Ui.ruleRev
+            RuleStore.all()
+                .mapNotNull { ruleScopePkg(it).takeIf(String::isNotBlank) }
+                .distinct()
+                .filter { it !in scope }
+        }
+        if (recommended.isNotEmpty()) {
+            item {
+                Kit.RowGroup {
+                    Kit.PlainRow(
+                        title = "推荐勾选 ${recommended.size} 个应用",
+                        summary = "这些应用有规则但不在 LSPosed 作用域里，点一下推给框架（可能弹确认）",
+                        onClick = {
+                            com.wurao.core.XposedBridge.requestScope(recommended) { _, msg ->
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    Ui.ruleRev++
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
         if (filter == AppsFilter.SCOPE && !CfgPush.bound) {
             item { Kit.Note("框架未连接，拿不到 LSPosed 的作用域名单。去 LSPosed 里启用「无扰」并重开应用。") }
         }
@@ -134,8 +168,7 @@ fun AppsScreen() {
         if (loaded && apps.size <= 1) {
             item {
                 Kit.Note(
-                    "只拿到 ${apps.size} 个应用 —— 缺 MIUI 的 GET_INSTALLED_APPS 运行时权限。" +
-                        "也可以用下面的「手动输入包名」直接进详情页。"
+                    "只拿到 ${apps.size} 个应用 —— 缺 MIUI 的 GET_INSTALLED_APPS 运行时权限，去系统设置里给无扰开一下。"
                 )
             }
         }
@@ -166,34 +199,6 @@ fun AppsScreen() {
             }
         }
 
-        // ---------- 手动输入包名 ----------
-        item {
-            var text by remember { mutableStateOf("") }
-            Kit.Group {
-                Text(
-                    "手动输入包名",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface,
-                )
-                TextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = "包名",
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(
-                        text = "打开",
-                        enabled = text.isNotBlank(),
-                        onClick = { Navigator.go(Dest.AppDetail(text.trim())) },
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -293,6 +298,36 @@ fun AppDetailScreen(pkg: String) {
                         Ui.ruleRev++
                     },
                 )
+            }
+        }
+
+        // ---------- 全局开屏规则（网易云这类不在专属名单里的 App 靠它生效） ----------
+        val globalClicks = run {
+            Ui.ruleRev
+            RuleStore.all().filter {
+                it.scope is com.wurao.core.model.Scope.Global &&
+                    (it.act == com.wurao.core.model.Act.CLICK ||
+                        it.act == com.wurao.core.model.Act.LONG_CLICK)
+            }
+        }
+        if (globalClicks.isNotEmpty()) {
+            item { Kit.Section("全局开屏规则", "${globalClicks.size} 条 · 对所有应用生效") }
+            item { Kit.Note("不在专属名单里的应用靠这几条通用「跳过」规则点按。停用会影响所有应用。") }
+            item {
+                Kit.RowGroup {
+                    globalClicks.forEach { r ->
+                        Kit.SwitchRow(
+                            title = "点掉 · " + r.note.ifBlank { r.target },
+                            summary = r.target,
+                            checked = r.enabled,
+                            onChecked = {
+                                RuleStore.setEnabled(r.id, it)
+                                Ui.pushRulesAsync(ctx)
+                                Ui.ruleRev++
+                            },
+                        )
+                    }
+                }
             }
         }
 
