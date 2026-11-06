@@ -173,7 +173,8 @@ fun ConfirmDialog(
 // ==================== 订阅与规则源 ====================
 
 /**
- * 订阅与规则源（二级页）：导入 + 我的规则，合一页。
+ * 订阅与规则源（二级页）：导入 + 订阅分组 + 域名表入口。
+ * 规则都是抓屏生成的，不再提供手写表单。
  *
  * 导入报告**不静默**：跳过了多少、为什么跳过，都要写进报告给你看。
  */
@@ -276,78 +277,6 @@ fun SourcesScreen() {
             }
         }
 
-        // ---------- 我的规则（手写） ----------
-        item { Kit.Section("我的规则") }
-        item {
-            Kit.Note(
-                "自己加的规则优先级最高 —— 你是亲眼看到那个东西才加的，比订阅来的更可信。\n" +
-                    "例：藏掉美团底栏的视频入口 → 包名 com.sankuai.meituan，" +
-                    "选择器 [vid=\"bottom_tab_block\"] << [desc=\"视频\"]"
-            )
-        }
-        item {
-            Kit.Group {
-                TextField(
-                    value = pkg,
-                    onValueChange = { pkg = it },
-                    label = "包名（* 表示所有应用）",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextField(
-                    value = sel,
-                    onValueChange = { sel = it },
-                    label = "选择器",
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-                TextField(
-                    value = noteInput,
-                    onValueChange = { noteInput = it },
-                    label = "备注（这条规则干嘛的，留空用选择器代替）",
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-                // 动作选择：胶囊按钮组
-                Row(
-                    modifier = Modifier.padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Act.entries.filter { it.allows(Domain.NODE) }.forEach { a ->
-                        val on = act == a
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    if (on) MiuixTheme.colorScheme.primary
-                                    else MiuixTheme.colorScheme.surfaceVariant
-                                )
-                                .clickable { act = a }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        ) {
-                            Text(
-                                actCn(a),
-                                fontSize = 12.sp,
-                                color = if (on) androidx.compose.ui.graphics.Color.White
-                                else MiuixTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(0.dp),
-                            )
-                        }
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(text = "加一条", onClick = { add() })
-                }
-                if (tip.isNotEmpty()) {
-                    Text(
-                        tip,
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                }
-            }
-        }
-
         // ---------- 我的规则清单 ----------
         // 规则按来源分组显示。**不能逐条铺开**：库里两万条（大半是广告域名），
         // 一次性组合两万个 Card 会把界面压死。只有你自己抓的那几条才逐条列。
@@ -387,6 +316,7 @@ fun SourcesScreen() {
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                         }
+                        TextButton(text = "查看全部", onClick = { Navigator.go(Dest.DomainList) })
                         TextButton(text = "清空", onClick = {
                             dnsRules.forEach { RuleStore.remove(it.id) }
                             ctx.deleteFile("adclose.txt")

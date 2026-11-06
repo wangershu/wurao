@@ -30,8 +30,10 @@ sealed interface Dest {
     data object Hits : Dest
 
     // ---- 设置下挂 ----
-    /** 订阅与规则源：导入（订阅/域名表/网址）+ 我的规则 */
+    /** 订阅与规则源：导入 + 订阅分组 + 域名表入口 */
     data object Sources : Dest
+    /** 域名表：展示 adclose.txt 的全部域名 */
+    data object DomainList : Dest
     /** 备份与恢复 */
     data object Backup : Dest
     /** 外观：主题 + 底栏 */
