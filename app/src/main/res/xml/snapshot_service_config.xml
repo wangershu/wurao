@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 抓屏服务的配置。
      刻意**不**常驻遍历界面：只在「抓一屏」模式下处理事件，抓完即停（省电）。 -->
+<!-- flagReportViewIds 必需：没有它系统不会填充 viewIdResourceName，
+     抓到的控件只剩通用容器类名（摩托范 ad_container 就是栽在这里）。 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/snapshot_desc"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
-    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagIncludeNotImportantViews|flagReportViewIds"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="100" />
